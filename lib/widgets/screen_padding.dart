@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-// Bottom padding for list views — clears the floating nav bar + system nav bar
-// Nav: 62 (height) + 12 (outer margin) + viewPadding.bottom (gesture inset)
-// + generous 28 buffer so cards / text never touch the glass nav strip.
+// Small bottom buffer for scrollable content. Actual nav-bar clearance is
+// reserved at the screen-content level by main.dart's outer Padding, so
+// individual screens don't need to compute nav geometry here.
 double navBottomPadding(BuildContext context) {
-  return 102 + MediaQuery.of(context).viewPadding.bottom;
+  return 16;
 }

@@ -97,7 +97,13 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
       body: Stack(
         children: [
           const _AppBackground(),
-          FadeTransition(opacity: _fade, child: _screens[_index]),
+          // Reserve nav-bar space at the screen-content level so no screen
+          // ever paints behind the floating nav. 62 nav + 12 outer margin
+          // + 12 buffer + system inset.
+          Padding(
+            padding: EdgeInsets.only(bottom: 86 + bottomInset),
+            child: FadeTransition(opacity: _fade, child: _screens[_index]),
+          ),
         ],
       ),
       bottomNavigationBar: _floatingNav(bottomInset),
