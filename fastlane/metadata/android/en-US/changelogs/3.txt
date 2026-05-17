@@ -1,0 +1,9 @@
+v1.1.0
+
+• Custom "ding" notification sound for timer / countdown / pomodoro alerts
+• Live ongoing notification with countdown — Pomodoro shows "Focus 1/4"
+  / "Break 2/4" with a built-in chronometer, Countdown shows time
+  remaining, Stopwatch shows time elapsed
+• Live notification updates at each Pomodoro segment boundary even when
+  the app is closed
+• Stopwatch live notification switches to "Paused at MM:SS" on pause

@@ -7,6 +7,15 @@ class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static String? lastError;
 
+  // Reserved notification IDs — keep separate from task reminders.
+  static const int kLiveTimerId = 900100;
+
+  // Channel ID bumped to v4 to pick up the custom ding sound. Android
+  // notification channels are immutable once created, so a fresh ID is
+  // the only way to apply new sound / vibration / importance settings.
+  static const String _timerChannel = 'timer_alerts_v4';
+  static const _timerSound = RawResourceAndroidNotificationSound('ding');
+
   static Future<void> init() async {
     tz.initializeTimeZones();
     try {
@@ -31,11 +40,12 @@ class NotificationService {
       enableVibration: true,
     );
     const timerChannel = AndroidNotificationChannel(
-      'timer_alerts_v3',
+      _timerChannel,
       'Timer Alerts',
-      description: 'Pomodoro and countdown completions',
+      description: 'Pomodoro / countdown completions and live timers',
       importance: Importance.max,
       playSound: true,
+      sound: _timerSound,
       enableVibration: true,
     );
     final android = _plugin
@@ -73,19 +83,59 @@ class NotificationService {
     ),
   );
 
-  // No fullScreenIntent — Android 14 restricts that to alarm-clock apps only
-  // and a denied permission can swallow the whole notification silently.
-  static const _timerDetails = NotificationDetails(
+  // One-shot alert (segment transition, completion).
+  static const _timerAlertDetails = NotificationDetails(
     android: AndroidNotificationDetails(
-      'timer_alerts_v3', 'Timer Alerts',
+      _timerChannel, 'Timer Alerts',
       importance: Importance.max, priority: Priority.max,
       category: AndroidNotificationCategory.alarm,
       playSound: true, enableVibration: true,
+      sound: _timerSound,
       visibility: NotificationVisibility.public,
     ),
   );
 
-  // Try exact mode first; fall back to inexact if the OS denied exact alarms.
+  // Live (ongoing) chronometer — silent updates via onlyAlertOnce.
+  static NotificationDetails _liveDetails({
+    required int baseTimeMs,
+    required bool countDown,
+  }) {
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        _timerChannel, 'Timer Alerts',
+        importance: Importance.high, priority: Priority.high,
+        category: AndroidNotificationCategory.alarm,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        usesChronometer: true,
+        chronometerCountDown: countDown,
+        when: baseTimeMs,
+        showWhen: true,
+        playSound: false,
+        enableVibration: false,
+        visibility: NotificationVisibility.public,
+      ),
+    );
+  }
+
+  // Static (no chronometer) ongoing notification — used for the "paused" state.
+  static NotificationDetails _liveStaticDetails() {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _timerChannel, 'Timer Alerts',
+        importance: Importance.high, priority: Priority.high,
+        category: AndroidNotificationCategory.alarm,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        playSound: false,
+        enableVibration: false,
+        visibility: NotificationVisibility.public,
+      ),
+    );
+  }
+
   static Future<void> _scheduleWithFallback(
       int id, String title, String body, tz.TZDateTime when, NotificationDetails details,
       {DateTimeComponents? match}) async {
@@ -113,24 +163,71 @@ class NotificationService {
     }
   }
 
-  // Fire a notification N seconds from now.
+  // ── Alert notifications (segment transitions, completions) ────────────────
   static Future<void> scheduleTimerAlert(
       int id, String title, String body, int secondsFromNow) async {
     final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: secondsFromNow));
-    await _scheduleWithFallback(id, title, body, when, _timerDetails);
+    await _scheduleWithFallback(id, title, body, when, _timerAlertDetails);
   }
 
-  // Fire a notification right now — used as a reliable in-app completion alert
-  // (heads-up notification plays sound + vibration even when the app is open).
   static Future<void> showTimerAlertNow(int id, String title, String body) async {
     try {
-      await _plugin.show(id, title, body, _timerDetails);
+      await _plugin.show(id, title, body, _timerAlertDetails);
     } catch (e) {
       lastError = 'show: $e';
     }
   }
 
-  // One-time reminder on a specific date + time.
+  // ── Live chronometer (ongoing, silent updates) ────────────────────────────
+  // baseTimeMs: epoch millis to count from (stopwatch) or to (countdown).
+  static Future<void> showLiveChronometer({
+    required String title,
+    required String body,
+    required int baseTimeMs,
+    required bool countDown,
+  }) async {
+    try {
+      await _plugin.show(
+        kLiveTimerId, title, body,
+        _liveDetails(baseTimeMs: baseTimeMs, countDown: countDown),
+      );
+    } catch (e) {
+      lastError = 'live show: $e';
+    }
+  }
+
+  // Schedule a future replacement of the live notification (used to swap the
+  // chronometer base + title at Pomodoro segment boundaries).
+  static Future<void> scheduleLiveChronometer({
+    required String title,
+    required String body,
+    required int atSecondsFromNow,
+    required int baseTimeMs,
+    required bool countDown,
+  }) async {
+    final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: atSecondsFromNow));
+    await _scheduleWithFallback(
+      kLiveTimerId, title, body, when,
+      _liveDetails(baseTimeMs: baseTimeMs, countDown: countDown),
+    );
+  }
+
+  static Future<void> showLiveStatic({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await _plugin.show(kLiveTimerId, title, body, _liveStaticDetails());
+    } catch (e) {
+      lastError = 'live static: $e';
+    }
+  }
+
+  static Future<void> cancelLive() async {
+    await cancel(kLiveTimerId);
+  }
+
+  // ── Task reminders (separate channel, default sound) ─────────────────────
   static Future<void> scheduleReminder(
       int id, String taskText, String dueDateStr, String reminderTime) async {
     final dp = dueDateStr.split('-');
@@ -145,7 +242,6 @@ class NotificationService {
     await _scheduleWithFallback(id, '📌 Task reminder', taskText, scheduled, _taskDetails);
   }
 
-  // Weekly recurring reminder on a specific day of week + time.
   static Future<void> scheduleRecurring(
       int id, String taskText, int dayOfWeek, String reminderTime) async {
     final tp = reminderTime.split(':');
@@ -162,6 +258,7 @@ class NotificationService {
         match: DateTimeComponents.dayOfWeekAndTime);
   }
 
+  // ── Cancel ────────────────────────────────────────────────────────────────
   static Future<void> cancel(int id) async {
     try { await _plugin.cancel(id); } catch (_) {}
   }
