@@ -211,35 +211,6 @@ class _DailyJournalTabState extends State<DailyJournalTab> {
     if (d != null) _selectDate(d);
   }
 
-  void _insertLinePrefix(String prefix) {
-    final pos  = _ctrl.selection.isValid ? _ctrl.selection.baseOffset : _ctrl.text.length;
-    final txt  = _ctrl.text;
-    final ls   = txt.lastIndexOf('\n', pos > 0 ? pos - 1 : 0) + 1;
-    final newT = txt.substring(0, ls) + prefix + txt.substring(ls);
-    _ctrl.value = TextEditingValue(text: newT, selection: TextSelection.collapsed(offset: pos + prefix.length));
-    _schedule();
-  }
-
-  void _wrapText(String pre, String suf) {
-    final sel = _ctrl.selection;
-    final txt = _ctrl.text;
-    if (!sel.isValid || sel.isCollapsed) {
-      final pos = sel.isValid ? sel.baseOffset : txt.length;
-      _ctrl.value = TextEditingValue(
-        text: txt.substring(0, pos) + pre + suf + txt.substring(pos),
-        selection: TextSelection.collapsed(offset: pos + pre.length),
-      );
-    } else {
-      final seg  = txt.substring(sel.start, sel.end);
-      final newT = txt.replaceRange(sel.start, sel.end, '$pre$seg$suf');
-      _ctrl.value = TextEditingValue(
-        text: newT,
-        selection: TextSelection.collapsed(offset: sel.start + pre.length + seg.length + suf.length),
-      );
-    }
-    _schedule();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(children: [
@@ -353,7 +324,7 @@ class _DailyJournalTabState extends State<DailyJournalTab> {
       // Text editor
       Expanded(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
           child: GlassCard(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -374,48 +345,7 @@ class _DailyJournalTabState extends State<DailyJournalTab> {
           ),
         ),
       ),
-
-      // Markdown toolbar
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withAlpha(8),
-          border: Border(top: BorderSide(color: Colors.white.withAlpha(15))),
-        ),
-        padding: EdgeInsets.fromLTRB(8, 6, 8,
-            MediaQuery.of(context).viewInsets.bottom > 0 ? 6 : navBottomPadding(context) - 40 > 6 ? navBottomPadding(context) - 40 : 6),
-        child: Row(children: [
-          _tb('B', () => _wrapText('**', '**'), bold: true),
-          _tb('I', () => _wrapText('*', '*'),   italic: true),
-          _tb('H', () => _insertLinePrefix('## ')),
-          _tb('•', () => _insertLinePrefix('- ')),
-          _tb('`', () => _wrapText('`', '`'),   mono: true),
-          _tb('❝', () => _insertLinePrefix('> ')),
-          const Spacer(),
-          ValueListenableBuilder(
-            valueListenable: _ctrl,
-            builder: (_, __, ___) {
-              final wc = _ctrl.text.trim().isEmpty ? 0 : _ctrl.text.trim().split(RegExp(r'\s+')).length;
-              return Text('$wc w', style: const TextStyle(color: Colors.white24, fontSize: 11));
-            },
-          ),
-          const SizedBox(width: 8),
-        ]),
-      ),
     ]);
-  }
-
-  Widget _tb(String label, VoidCallback onTap, {bool bold = false, bool italic = false, bool mono = false}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(width: 36, height: 34,
-        child: Center(child: Text(label, style: TextStyle(
-          color: Colors.white54, fontSize: 14,
-          fontWeight: bold ? FontWeight.w900 : FontWeight.w500,
-          fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-          fontFamily: mono ? 'monospace' : null,
-        )))),
-    );
   }
 }
 

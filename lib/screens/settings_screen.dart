@@ -231,19 +231,21 @@ class SettingsScreen extends StatelessWidget {
             // App identity
             GlassCard(
               child: Row(children: [
-                Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [kPurple, Color(0xFF9333EA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.access_time_filled_rounded, color: Colors.white, size: 28),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset('icon_source.png', width: 52, height: 52, fit: BoxFit.cover),
                 ),
                 const SizedBox(width: 14),
-                const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Tympeak', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-                  Text('Version 1.0.0', style: TextStyle(color: Colors.white38, fontSize: 13)),
-                ]),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Tympeak', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('Made with ♥ by Spacechase',
+                      style: TextStyle(color: Colors.white.withAlpha(160), fontSize: 12)),
+                    const SizedBox(height: 1),
+                    const Text('Version 1.0.0', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                  ]),
+                ),
               ]),
             ),
 
@@ -356,10 +358,7 @@ class SettingsScreen extends StatelessWidget {
               ]),
             ),
 
-            const SizedBox(height: 32),
-            Center(
-              child: Text('Made with ♥ by Spacechase', style: TextStyle(color: Colors.white.withAlpha(30), fontSize: 12)),
-            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),

@@ -1,17 +1,36 @@
-# tympeak
+<div align="center">
+  <img src="icon_source.png" width="120" alt="Tympeak" />
 
-A new Flutter project.
+# Tympeak
 
-## Getting Started
+**A no-nonsense productivity app — built in a day.**
 
-This project is a starting point for a Flutter application.
+Tasks, Habits, a Pomodoro timer, and Notes. All offline. No accounts, no cloud, no tracking.
 
-A few resources to get you started if this is your first Flutter project:
+</div>
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## What's in it
+
+- **Tasks** — priority, due dates, recurring days, custom notification time, swipe-to-delete with confirm.
+- **Habits** — yes/no, countable, and timer types. Streaks, weekly heatmap, confetti when the day's done.
+- **Timer** — Pomodoro work/break cycles with progress ring.
+- **Notes** — Daily Journal (with mood + streak) and Quick Notes (autosave, search, pin, archive, markdown editor).
+- **Settings** — JSON export/import for notes, CSV for habits, wipe-all switch.
+
+## Design
+
+Glassmorphism, dark, edge-to-edge, floating nav bar. Built around minimal taps — everything autosaves.
+
+## Install
+
+Grab the latest release APK and sideload it on Android.
+
+## Stack
+
+Flutter · Dart · Hive (local storage) · `flutter_local_notifications` · no backend.
+
+## Built
+
+In one day. The kind of side project that has no business existing, and that's the point.
