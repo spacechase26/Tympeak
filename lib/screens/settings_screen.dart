@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 import '../data/storage.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
@@ -28,6 +33,174 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _q(String s) => '"${s.replaceAll('"', '""')}"';
+
+  List<String> _parseCsvRow(String row) {
+    final result = <String>[];
+    var i = 0;
+    while (i < row.length) {
+      if (row[i] == '"') {
+        i++;
+        final buf = StringBuffer();
+        while (i < row.length) {
+          if (row[i] == '"' && i + 1 < row.length && row[i + 1] == '"') {
+            buf.write('"'); i += 2;
+          } else if (row[i] == '"') {
+            i++; break;
+          } else {
+            buf.write(row[i++]);
+          }
+        }
+        result.add(buf.toString());
+        if (i < row.length && row[i] == ',') i++;
+      } else {
+        final end = row.indexOf(',', i);
+        if (end == -1) { result.add(row.substring(i)); break; }
+        result.add(row.substring(i, end));
+        i = end + 1;
+      }
+    }
+    return result;
+  }
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final box = Storage.habits;
+    if (box.isEmpty) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No habits to export')));
+      return;
+    }
+    final buf = StringBuffer();
+    buf.writeln('name,emoji,color,type,target,schedule,customDays,createdAt,logs');
+    for (final key in box.keys) {
+      final raw = box.get(key) as Map?;
+      if (raw == null) continue;
+      final rawLogs = raw['logs'];
+      Map<String, int> logs;
+      if (rawLogs is List) {
+        logs = { for (final d in rawLogs) d.toString(): 1 };
+      } else if (rawLogs is Map) {
+        logs = rawLogs.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+      } else {
+        logs = {};
+      }
+      final logsStr = logs.entries.map((e) => '${e.key}=${e.value}').join('|');
+      final customDays = List<int>.from(raw['customDays'] ?? [1, 2, 3, 4, 5, 6, 7]);
+      buf.writeln([
+        _q(raw['name']?.toString() ?? ''),
+        _q(raw['emoji']?.toString() ?? '⭐'),
+        _q('${raw['color'] ?? 0xFF7C3AED}'),
+        _q(raw['type']?.toString() ?? 'yes_no'),
+        _q('${raw['target'] ?? 1}'),
+        _q(raw['schedule']?.toString() ?? 'daily'),
+        _q(customDays.join('|')),
+        _q(raw['createdAt']?.toString() ?? ''),
+        _q(logsStr),
+      ].join(','));
+    }
+    final tmp = File('${Directory.systemTemp.path}/tympeak_habits.csv');
+    await tmp.writeAsString(buf.toString());
+    await Share.shareXFiles([XFile(tmp.path)], text: 'Tympeak habits export');
+  }
+
+  Future<void> _exportNotes(BuildContext context) async {
+    final box = Storage.notes;
+    if (box.isEmpty) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No notes to export')));
+      return;
+    }
+    final Map<String, dynamic> data = {};
+    for (final key in box.keys) {
+      final val = box.get(key);
+      if (val is Map) {
+        data[key.toString()] = Map<String, dynamic>.from(val);
+      } else if (val is String) {
+        data[key.toString()] = val;
+      }
+    }
+    final json = const JsonEncoder.withIndent('  ').convert(data);
+    final tmp = File('${Directory.systemTemp.path}/tympeak_notes.json');
+    await tmp.writeAsString(json);
+    await Share.shareXFiles([XFile(tmp.path)], text: 'Tympeak notes export');
+  }
+
+  Future<void> _importNotes(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null) return;
+    final path = result.files.single.path;
+    if (path == null) return;
+    try {
+      final content = await File(path).readAsString();
+      final decoded = jsonDecode(content) as Map<String, dynamic>;
+      int count = 0;
+      for (final entry in decoded.entries) {
+        await Storage.notes.put(entry.key, entry.value);
+        count++;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported $count note${count == 1 ? '' : 's'}')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid notes backup file')));
+      }
+    }
+  }
+
+  Future<void> _importCsv(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (result == null) return;
+    final path = result.files.single.path;
+    if (path == null) return;
+    final lines = await File(path).readAsLines();
+    if (lines.length < 2) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No habits found in file')));
+      return;
+    }
+    int count = 0;
+    const uuid = Uuid();
+    for (int i = 1; i < lines.length; i++) {
+      if (lines[i].trim().isEmpty) continue;
+      final fields = _parseCsvRow(lines[i]);
+      if (fields.length < 8) continue;
+      final name = fields[0];
+      if (name.isEmpty) continue;
+      final logsStr = fields.length > 8 ? fields[8] : '';
+      final logs = <String, int>{};
+      if (logsStr.isNotEmpty) {
+        for (final pair in logsStr.split('|')) {
+          final parts = pair.split('=');
+          if (parts.length == 2) logs[parts[0]] = int.tryParse(parts[1]) ?? 0;
+        }
+      }
+      final customDays = fields[6].isEmpty
+          ? [1, 2, 3, 4, 5, 6, 7]
+          : fields[6].split('|').map((s) => int.tryParse(s) ?? 1).toList();
+      await Storage.habits.put(uuid.v4(), {
+        'name': name,
+        'emoji': fields[1],
+        'color': int.tryParse(fields[2]) ?? 0xFF7C3AED,
+        'type': fields[3],
+        'target': int.tryParse(fields[4]) ?? 1,
+        'schedule': fields[5],
+        'customDays': customDays,
+        'createdAt': fields[7],
+        'logs': logs,
+      });
+      count++;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported $count habit${count == 1 ? '' : 's'}')));
+    }
   }
 
   @override
@@ -109,8 +282,63 @@ class SettingsScreen extends StatelessWidget {
                     Storage.todos.clear();
                     Storage.habits.clear();
                     Storage.pomodoro.clear();
+                    Storage.notes.clear();
                   }),
                   destructive: true,
+                ),
+              ]),
+            ),
+
+            const SizedBox(height: 16),
+            _sectionLabel('Habits Backup'),
+            const SizedBox(height: 10),
+
+            GlassCard(
+              padding: EdgeInsets.zero,
+              child: Column(children: [
+                _tile(
+                  context,
+                  icon: Icons.upload_rounded,
+                  iconColor: const Color(0xFF16A34A),
+                  label: 'Export Habits',
+                  sub: 'Save habits as CSV file',
+                  onTap: () => _exportCsv(context),
+                ),
+                _divider(),
+                _tile(
+                  context,
+                  icon: Icons.download_rounded,
+                  iconColor: const Color(0xFF0891B2),
+                  label: 'Import Habits',
+                  sub: 'Load habits from CSV file',
+                  onTap: () => _importCsv(context),
+                ),
+              ]),
+            ),
+
+            const SizedBox(height: 16),
+            _sectionLabel('Notes Backup'),
+            const SizedBox(height: 10),
+
+            GlassCard(
+              padding: EdgeInsets.zero,
+              child: Column(children: [
+                _tile(
+                  context,
+                  icon: Icons.upload_rounded,
+                  iconColor: const Color(0xFF16A34A),
+                  label: 'Export Notes',
+                  sub: 'Save notes & journal as JSON',
+                  onTap: () => _exportNotes(context),
+                ),
+                _divider(),
+                _tile(
+                  context,
+                  icon: Icons.download_rounded,
+                  iconColor: const Color(0xFF0891B2),
+                  label: 'Import Notes',
+                  sub: 'Restore notes from JSON backup',
+                  onTap: () => _importNotes(context),
                 ),
               ]),
             ),
@@ -124,9 +352,7 @@ class SettingsScreen extends StatelessWidget {
               child: Column(children: [
                 _tile(context, icon: Icons.info_outline_rounded, iconColor: Colors.white38, label: 'Built with Flutter', sub: 'Open source UI toolkit by Google'),
                 _divider(),
-                _tile(context, icon: Icons.lock_outline_rounded, iconColor: Colors.white38, label: 'Privacy', sub: 'All data stays on your device'),
-                _divider(),
-                _tile(context, icon: Icons.calendar_today_rounded, iconColor: Colors.white38, label: 'Google Calendar', sub: 'Data synced directly with Google — we store nothing'),
+                _tile(context, icon: Icons.lock_outline_rounded, iconColor: Colors.white38, label: 'Privacy', sub: 'All data stays on your device — no cloud sync'),
               ]),
             ),
 

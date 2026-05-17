@@ -2,16 +2,19 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'data/storage.dart';
+import 'data/notification_service.dart';
 import 'theme.dart';
 import 'screens/tasks_screen.dart';
 import 'screens/habits_screen.dart';
 import 'screens/timer_screen.dart';
-import 'screens/calendar_screen.dart';
+import 'screens/notes_screen.dart';
 import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Storage.init();
+  await NotificationService.init();
+  await NotificationService.requestPermissions();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,
@@ -51,7 +54,7 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
     TasksScreen(),
     HabitsScreen(),
     TimerScreen(),
-    CalendarScreen(),
+    NotesScreen(),
     SettingsScreen(),
   ];
 
@@ -59,7 +62,7 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
     (Icons.check_circle_outline_rounded, Icons.check_circle_rounded, 'Tasks'),
     (Icons.repeat_rounded,               Icons.repeat_rounded,        'Habits'),
     (Icons.timer_outlined,               Icons.timer_rounded,         'Timer'),
-    (Icons.calendar_month_outlined,      Icons.calendar_month_rounded,'Calendar'),
+    (Icons.edit_note_outlined,            Icons.edit_note_rounded,     'Notes'),
     (Icons.settings_outlined,            Icons.settings_rounded,      'Settings'),
   ];
 

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -29,12 +30,11 @@ class Habit {
   String get name     => raw['name'] ?? '';
   String get emoji    => raw['emoji'] ?? '⭐';
   Color  get color    => Color((raw['color'] ?? 0xFF7C3AED) as int);
-  String get type     => raw['type'] ?? 'yes_no';   // yes_no | count | time_min
+  String get type     => raw['type'] ?? 'yes_no';
   int    get target   => (raw['target'] ?? 1) as int;
-  String get schedule => raw['schedule'] ?? 'daily'; // daily|weekdays|weekends|custom
+  String get schedule => raw['schedule'] ?? 'daily';
   List<int> get customDays => List<int>.from(raw['customDays'] ?? [1,2,3,4,5,6,7]);
 
-  // migrate old list-based logs → map
   Map<String, int> get logs {
     final r = raw['logs'];
     if (r is List)  return { for (final d in r) d.toString(): 1 };
@@ -91,8 +91,29 @@ class Habit {
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-class HabitsScreen extends StatelessWidget {
+class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key});
+
+  @override
+  State<HabitsScreen> createState() => _HabitsScreenState();
+}
+
+class _HabitsScreenState extends State<HabitsScreen> {
+  late final ConfettiController _confetti;
+  bool _initialized = false;
+  int  _prevDone    = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 3));
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    super.dispose();
+  }
 
   List<Habit> _habits(Box box) =>
       box.keys.map((k) => Habit(k, Map.from(box.get(k)))).toList();
@@ -103,36 +124,68 @@ class HabitsScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
-        child: ValueListenableBuilder(
-          valueListenable: Storage.habits.listenable(),
-          builder: (ctx, box, _) {
-            final habits = _habits(box);
-            final due    = habits.where((h) => h.isDueToday).toList();
-            final rest   = habits.where((h) => !h.isDueToday).toList();
-            final done   = due.where((h) => h.doneToday).length;
+        child: Stack(children: [
+          ValueListenableBuilder(
+            valueListenable: Storage.habits.listenable(),
+            builder: (ctx, box, _) {
+              final habits = _habits(box);
+              final due    = habits.where((h) => h.isDueToday).toList();
+              final rest   = habits.where((h) => !h.isDueToday).toList();
+              final done   = due.where((h) => h.doneToday).length;
 
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _Header(done: done, total: due.length, onAdd: () => _showAddSheet(ctx)),
-              Expanded(
-                child: habits.isEmpty
-                    ? _Empty(onAdd: () => _showAddSheet(ctx))
-                    : ListView(
-                        padding: EdgeInsets.fromLTRB(20, 0, 20, navBottomPadding(ctx)),
-                        children: [
-                          if (due.isNotEmpty) ...[
-                            _label('Today'),
-                            ...due.map((h) => _HabitCard(habit: h, onTap: () => _openDetail(ctx, h))),
+              // Fire confetti only when the last habit flips to done (not on first load)
+              if (!_initialized) {
+                _prevDone    = done;
+                _initialized = true;
+              } else if (due.isNotEmpty && done == due.length && done > _prevDone) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _confetti.play();
+                });
+              }
+              _prevDone = done;
+
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _Header(done: done, total: due.length, onAdd: () => _showAddSheet(ctx)),
+                Expanded(
+                  child: habits.isEmpty
+                      ? _Empty(onAdd: () => _showAddSheet(ctx))
+                      : ListView(
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, navBottomPadding(ctx)),
+                          children: [
+                            if (due.isNotEmpty) ...[
+                              _label('Today'),
+                              ...due.map((h) => _HabitCard(habit: h, onTap: () => _openDetail(ctx, h))),
+                            ],
+                            if (rest.isNotEmpty) ...[
+                              _label('Rest days'),
+                              ...rest.map((h) => _HabitCard(habit: h, dimmed: true, onTap: () => _openDetail(ctx, h))),
+                            ],
                           ],
-                          if (rest.isNotEmpty) ...[
-                            _label('Rest days'),
-                            ...rest.map((h) => _HabitCard(habit: h, dimmed: true, onTap: () => _openDetail(ctx, h))),
-                          ],
-                        ],
-                      ),
-              ),
-            ]);
-          },
-        ),
+                        ),
+                ),
+              ]);
+            },
+          ),
+          // Confetti burst at top-center
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [
+                kPurple, Color(0xFF0891B2), Color(0xFF16A34A),
+                Color(0xFFEA580C), Color(0xFFDB2777), Color(0xFFCA8A04),
+                Colors.white,
+              ],
+              numberOfParticles: 40,
+              gravity: 0.15,
+              emissionFrequency: 0.05,
+              maxBlastForce: 22,
+              minBlastForce: 8,
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -225,6 +278,27 @@ class _Header extends StatelessWidget {
   }
 }
 
+// ── Shared done circle — consistent across all habit types ────────────────────
+class _DoneCircle extends StatelessWidget {
+  final Color color;
+  const _DoneCircle({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutBack,
+      width: 42, height: 42,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: [color, color.withAlpha(180)]),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
+    );
+  }
+}
+
 // ── Habit Card ────────────────────────────────────────────────────────────────
 class _HabitCard extends StatelessWidget {
   final Habit habit;
@@ -232,14 +306,35 @@ class _HabitCard extends StatelessWidget {
   final VoidCallback onTap;
   const _HabitCard({required this.habit, this.dimmed = false, required this.onTap});
 
+  String get _todayKey {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2,'0')}-${n.day.toString().padLeft(2,'0')}';
+  }
+
   void _log(BuildContext ctx, int delta) {
     final box  = Storage.habits;
     final data = Map<String, dynamic>.from(box.get(habit.key));
     final logs = habit.logs;
-    final dk   = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2,'0')}-${DateTime.now().day.toString().padLeft(2,'0')}';
-    final cur  = logs[dk] ?? 0;
-    final next = (cur + delta).clamp(0, habit.target * 2);
-    logs[dk]   = next;
+    final cur  = logs[_todayKey] ?? 0;
+    final next = (cur + delta).clamp(0, habit.target);
+    logs[_todayKey] = next;
+    data['logs'] = logs;
+    box.put(habit.key, data);
+    HapticFeedback.lightImpact();
+  }
+
+  void _undoToday(BuildContext ctx) {
+    final box  = Storage.habits;
+    final data = Map<String, dynamic>.from(box.get(habit.key));
+    final logs = habit.logs;
+    if (habit.type == 'count') {
+      logs[_todayKey] = habit.target - 1;
+    } else {
+      logs.remove(_todayKey);
+      if (habit.type == 'time_min') {
+        HabitTimerManager.instance.reset(habit.key, habit.target * 60);
+      }
+    }
     data['logs'] = logs;
     box.put(habit.key, data);
     HapticFeedback.lightImpact();
@@ -283,7 +378,6 @@ class _HabitCard extends StatelessWidget {
                 ? LinearGradient(colors: [habit.color.withAlpha(45), Colors.white.withAlpha(6)], begin: Alignment.topLeft, end: Alignment.bottomRight)
                 : null,
             child: Row(children: [
-              // Emoji circle
               Container(
                 width: 46, height: 46,
                 decoration: BoxDecoration(
@@ -293,9 +387,8 @@ class _HabitCard extends StatelessWidget {
                 child: Center(child: Text(habit.emoji, style: const TextStyle(fontSize: 22))),
               ),
               const SizedBox(width: 12),
-              // Info
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(habit.name, style: TextStyle(color: done ? Colors.white : Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                Text(habit.name, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Row(children: [
                   if (streak > 0) ...[
@@ -310,7 +403,7 @@ class _HabitCard extends StatelessWidget {
                 ]),
               ])),
               const SizedBox(width: 8),
-              // Logging control — type-aware
+              // Logging control — type-aware, consistent done circle
               if (habit.type == 'yes_no')
                 _YesNoControl(habit: habit, onLog: (d) => _log(context, d))
               else if (habit.type == 'count')
@@ -344,8 +437,10 @@ class _HabitCard extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 16),
-          Text(habit.emoji + ' ' + habit.name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('${habit.emoji} ${habit.name}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
+          if (habit.doneToday)
+            _option(ctx, Icons.undo_rounded, 'Undo Today', Colors.orange, () { Navigator.pop(ctx); _undoToday(ctx); }),
           _option(ctx, Icons.bar_chart_rounded, 'View Stats', kPurple, () {
             Navigator.pop(ctx);
             Navigator.push(ctx, MaterialPageRoute(builder: (_) => HabitDetailScreen(habitKey: habit.key)));
@@ -392,20 +487,19 @@ class _YesNoControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final done = habit.doneToday;
+    if (done) return _DoneCircle(color: habit.color);
     return GestureDetector(
-      onTap: () => onLog(done ? -habit.target : habit.target),
+      onTap: () => onLog(habit.target),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutBack,
         width: 42, height: 42,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: done ? LinearGradient(colors: [habit.color, habit.color.withAlpha(180)]) : null,
-          color: done ? null : Colors.white.withAlpha(12),
-          border: Border.all(color: done ? habit.color : Colors.white24, width: 1.5),
+          color: Colors.white.withAlpha(12),
+          border: Border.all(color: Colors.white24, width: 1.5),
         ),
-        child: Icon(done ? Icons.check_rounded : Icons.circle_outlined,
-            color: done ? Colors.white : Colors.white30, size: 22),
+        child: const Icon(Icons.circle_outlined, color: Colors.white30, size: 22),
       ),
     );
   }
@@ -421,16 +515,14 @@ class _CountControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final cur  = habit.valueFor(DateTime.now());
     final done = habit.doneToday;
+    if (done) return _DoneCircle(color: habit.color);
     return Row(mainAxisSize: MainAxisSize.min, children: [
       _btn(Icons.remove_rounded, () => onLog(-1), habit.color, outline: true),
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('$cur',
-            style: TextStyle(
-              color: done ? habit.color : Colors.white,
-              fontSize: 22, fontWeight: FontWeight.w800,
-            )),
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
           Text('/${habit.target}',
             style: const TextStyle(color: Colors.white38, fontSize: 12)),
         ]),
@@ -482,62 +574,9 @@ class _TimerControlState extends State<_TimerControl> {
 
   void _reset(int secs) { _mgr.reset(widget.habit.key, secs); setState(() {}); }
 
-  void _pickDuration(BuildContext ctx, int currentSecs) {
-    final ctrl = TextEditingController(text: '${currentSecs ~/ 60}');
-    showDialog(
-      context: ctx,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Set duration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            suffixText: 'min',
-            suffixStyle: TextStyle(color: Colors.white38, fontSize: 16),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: kPurple)),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(
-            onPressed: () {
-              final m = int.tryParse(ctrl.text) ?? (currentSecs ~/ 60);
-              if (m > 0) _reset(m * 60);
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: kPurple, foregroundColor: Colors.white, elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text('Set'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (widget.habit.doneToday) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: widget.habit.color.withAlpha(30),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: widget.habit.color.withAlpha(80)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.check_rounded, color: widget.habit.color, size: 15),
-          const SizedBox(width: 5),
-          Text('Done!', style: TextStyle(color: widget.habit.color, fontWeight: FontWeight.w700, fontSize: 12)),
-        ]),
-      );
-    }
+    if (widget.habit.doneToday) return _DoneCircle(color: widget.habit.color);
 
     return ValueListenableBuilder(
       valueListenable: _mgr.notifier(widget.habit.key, _defaultSecs),
@@ -552,24 +591,13 @@ class _TimerControlState extends State<_TimerControl> {
         return SizedBox(
           width: 100,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
-            // Timer display — tap to edit when not running
-            GestureDetector(
-              onTap: running ? null : () => _pickDuration(ctx, secs),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('$mm:$ss',
-                  style: TextStyle(
-                    color: running ? widget.habit.color : Colors.white70,
-                    fontSize: 18, fontWeight: FontWeight.w700,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  )),
-                if (!running) ...[
-                  const SizedBox(width: 3),
-                  const Icon(Icons.edit_rounded, color: Colors.white24, size: 10),
-                ],
-              ]),
-            ),
+            Text('$mm:$ss',
+              style: TextStyle(
+                color: running ? widget.habit.color : Colors.white70,
+                fontSize: 18, fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              )),
             const SizedBox(height: 4),
-            // Progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
@@ -579,7 +607,7 @@ class _TimerControlState extends State<_TimerControl> {
               ),
             ),
             const SizedBox(height: 6),
-            // Controls
+            // Reset only shown when running; pause larger than reset
             Row(mainAxisSize: MainAxisSize.min, children: [
               if (running) ...[
                 _ctl(Icons.refresh_rounded, () => _reset(total), small: true),
@@ -589,6 +617,7 @@ class _TimerControlState extends State<_TimerControl> {
                 running ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 running ? _pause : _start,
                 filled: true,
+                large: running,
                 color: widget.habit.color,
               ),
             ]),
@@ -598,8 +627,8 @@ class _TimerControlState extends State<_TimerControl> {
     );
   }
 
-  Widget _ctl(IconData icon, VoidCallback onTap, {bool filled = false, bool small = false, Color? color}) {
-    final sz = small ? 26.0 : 32.0;
+  Widget _ctl(IconData icon, VoidCallback onTap, {bool filled = false, bool small = false, bool large = false, Color? color}) {
+    final sz = small ? 26.0 : (large ? 36.0 : 32.0);
     final c  = color ?? kPurple;
     return GestureDetector(
       onTap: onTap,
@@ -704,7 +733,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
       'schedule':   _schedule,
       'customDays': _customDays,
       'logs':       widget.existing != null
-          ? Habit('', widget.existing!).logs   // preserve existing logs
+          ? Habit('', widget.existing!).logs
           : <String, int>{},
       'createdAt':  widget.existing?['createdAt'] ?? DateTime.now().toIso8601String(),
     };
@@ -724,14 +753,12 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
         radius: 28,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Drag handle
             Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
             Text(widget.editKey != null ? 'Edit Habit' : 'New Habit',
               style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 18),
 
-            // Emoji + Name row
             Row(children: [
               GestureDetector(
                 onTap: _pickEmoji,
@@ -760,7 +787,6 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
             ]),
             const SizedBox(height: 16),
 
-            // Color row
             _sectionLabel('Color'),
             const SizedBox(height: 8),
             Row(children: _kColors.map((c) => GestureDetector(
@@ -777,7 +803,6 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
             )).toList()),
             const SizedBox(height: 16),
 
-            // Type
             _sectionLabel('Type'),
             const SizedBox(height: 8),
             _TypeSelector(value: _type, color: _color, onChange: (t) => setState(() { _type = t; if (t == 'yes_no') _target = 1; })),
@@ -787,7 +812,6 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
             ],
             const SizedBox(height: 16),
 
-            // Schedule
             _sectionLabel('Schedule'),
             const SizedBox(height: 8),
             _ScheduleSelector(
@@ -797,7 +821,6 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
             ),
             const SizedBox(height: 20),
 
-            // Save
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -887,8 +910,8 @@ class _TypeSelector extends StatelessWidget {
   }
 }
 
-// ── Target Row ────────────────────────────────────────────────────────────────
-class _TargetRow extends StatelessWidget {
+// ── Target Row — +/- for count, keyboard input for time_min ───────────────────
+class _TargetRow extends StatefulWidget {
   final String type;
   final int target;
   final Color color;
@@ -896,25 +919,74 @@ class _TargetRow extends StatelessWidget {
   const _TargetRow({required this.type, required this.target, required this.color, required this.onChange});
 
   @override
+  State<_TargetRow> createState() => _TargetRowState();
+}
+
+class _TargetRowState extends State<_TargetRow> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: '${widget.target}');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final label = type == 'time_min' ? 'Target (minutes)' : 'Target (count)';
-    final step  = type == 'time_min' ? 5 : 1;
+    if (widget.type == 'time_min') {
+      return Row(children: [
+        const Text('Target (minutes)', style: TextStyle(color: Colors.white54, fontSize: 13)),
+        const Spacer(),
+        SizedBox(
+          width: 90,
+          child: TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: widget.color, fontSize: 20, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              filled: true,
+              fillColor: widget.color.withAlpha(20),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: widget.color.withAlpha(80))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: widget.color.withAlpha(80))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: widget.color)),
+              suffixText: 'min',
+              suffixStyle: const TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            onChanged: (v) {
+              final val = int.tryParse(v);
+              if (val != null && val > 0) widget.onChange(val);
+            },
+          ),
+        ),
+      ]);
+    }
+
+    // Count type: +/- stepper
     return Row(children: [
-      Text(label, style: const TextStyle(color: Colors.white54, fontSize: 13)),
+      const Text('Target (count)', style: TextStyle(color: Colors.white54, fontSize: 13)),
       const Spacer(),
       GestureDetector(
-        onTap: () { if (target > step) onChange(target - step); },
+        onTap: () { if (widget.target > 1) widget.onChange(widget.target - 1); },
         child: Container(width: 32, height: 32, decoration: BoxDecoration(color: Colors.white.withAlpha(10), borderRadius: BorderRadius.circular(8)),
           child: const Icon(Icons.remove_rounded, color: Colors.white54, size: 16)),
       ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text('$target', style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
+        child: Text('${widget.target}', style: TextStyle(color: widget.color, fontSize: 18, fontWeight: FontWeight.w700)),
       ),
       GestureDetector(
-        onTap: () => onChange(target + step),
-        child: Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withAlpha(40), borderRadius: BorderRadius.circular(8)),
-          child: Icon(Icons.add_rounded, color: color, size: 16)),
+        onTap: () => widget.onChange(widget.target + 1),
+        child: Container(width: 32, height: 32, decoration: BoxDecoration(color: widget.color.withAlpha(40), borderRadius: BorderRadius.circular(8)),
+          child: Icon(Icons.add_rounded, color: widget.color, size: 16)),
       ),
     ]);
   }

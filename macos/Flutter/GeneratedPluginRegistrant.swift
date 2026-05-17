@@ -5,8 +5,12 @@
 import FlutterMacOS
 import Foundation
 
-import google_sign_in_ios
+import flutter_local_notifications
+import flutter_timezone
+import share_plus
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  FLTGoogleSignInPlugin.register(with: registry.registrar(forPlugin: "FLTGoogleSignInPlugin"))
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
+  FlutterTimezonePlugin.register(with: registry.registrar(forPlugin: "FlutterTimezonePlugin"))
+  SharePlusMacosPlugin.register(with: registry.registrar(forPlugin: "SharePlusMacosPlugin"))
 }
