@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../data/keep_alive.dart';
 import '../data/notification_service.dart';
 import '../data/storage.dart';
 import '../theme.dart';
@@ -99,6 +100,61 @@ class _TimerScreenState extends State<TimerScreen>
     }
     NotificationService.cancelLive();
     Storage.pomodoro.delete('active');
+    TimerKeepAlive.stop();
+  }
+
+  // Pomodoro all-done. Must await the cancel of the scheduled completion
+  // alert before showing the immediate one, otherwise the cancel can land
+  // *after* the show and silently dismiss our completion notification.
+  Future<void> _firePomoCompletion(
+      Map<String, dynamic> a, bool wasRunning, int loops) async {
+    const completionId = _kNotifBaseTimer + 9000;
+
+    await NotificationService.cancel(completionId);
+    final ids = List<int>.from(a['notifIds'] as List? ?? [])..remove(completionId);
+    await NotificationService.cancelAll(ids);
+    await NotificationService.cancelLive();
+    Storage.pomodoro.delete('active');
+    TimerKeepAlive.stop();
+
+    if (!mounted) return;
+    setState(() {
+      _pomoRunning = false; _pomoBreak = false; _pomoRound = 1;
+      _pomoSegmentLeft = _focusMin * 60;
+    });
+
+    if (wasRunning) {
+      HapticFeedback.heavyImpact();
+      await NotificationService.showTimerAlertNow(
+        completionId,
+        '🎉 Pomodoro complete',
+        '$loops rounds done. Great work!',
+      );
+    }
+  }
+
+  Future<void> _fireCdCompletion(
+      Map<String, dynamic> a, bool wasRunning) async {
+    const completionId = _kNotifBaseTimer + 9999;
+
+    await NotificationService.cancel(completionId);
+    final ids = List<int>.from(a['notifIds'] as List? ?? [])..remove(completionId);
+    await NotificationService.cancelAll(ids);
+    await NotificationService.cancelLive();
+    Storage.pomodoro.delete('active');
+    TimerKeepAlive.stop();
+
+    if (!mounted) return;
+    setState(() { _cdRunning = false; _cdSecondsLeft = _cdSec; });
+
+    if (wasRunning) {
+      HapticFeedback.heavyImpact();
+      await NotificationService.showTimerAlertNow(
+        completionId,
+        '⏰ Time\'s up',
+        'Countdown complete',
+      );
+    }
   }
 
   // On (re)entry, look at stored active state and restore UI.
@@ -116,6 +172,9 @@ class _TimerScreenState extends State<TimerScreen>
       });
       return;
     }
+    // A timer is active — make sure the keep-alive foreground service is up
+    // so the OS doesn't kill the Dart isolate while the screen is locked.
+    TimerKeepAlive.start();
     switch (a['type'] as String) {
       case 'pomodoro':   _restorePomo(a);   break;
       case 'countdown':  _restoreCd(a);     break;
@@ -145,20 +204,9 @@ class _TimerScreenState extends State<TimerScreen>
       cursor += segLen;
       if (!inBreak) {
         if (round == loops) {
-          // All rounds done.
-          _clearActive();
-          setState(() {
-            _pomoRunning = false; _pomoBreak = false; _pomoRound = 1;
-            _pomoSegmentLeft = _focusMin * 60;
-          });
-          if (wasRunning) {
-            HapticFeedback.heavyImpact();
-            NotificationService.showTimerAlertNow(
-              _kNotifBaseTimer + 9000,
-              '🎉 Pomodoro complete',
-              '$loops rounds done. Great work!',
-            );
-          }
+          // All rounds done — must await cancel before show on the same ID,
+          // or the late-arriving cancel silently kills our completion alert.
+          _firePomoCompletion(a, wasRunning, loops);
           return;
         }
         inBreak = true;
@@ -214,17 +262,7 @@ class _TimerScreenState extends State<TimerScreen>
     final elapsedSec = (nowMs - startedMs) ~/ 1000;
     final left = totalSec - elapsedSec;
     if (left <= 0) {
-      final wasRunning = _cdRunning;
-      _clearActive();
-      setState(() { _cdRunning = false; _cdSecondsLeft = _cdSec; });
-      if (wasRunning) {
-        HapticFeedback.heavyImpact();
-        NotificationService.showTimerAlertNow(
-          _kNotifBaseTimer + 9999,
-          '⏰ Time\'s up',
-          'Countdown complete',
-        );
-      }
+      _fireCdCompletion(a, _cdRunning);
       return;
     }
     setState(() {
@@ -332,6 +370,7 @@ class _TimerScreenState extends State<TimerScreen>
       _pomoRound   = 1;
       _pomoSegmentLeft = focusSec;
     });
+    TimerKeepAlive.start();
     _startPomoUiTick();
   }
 
@@ -386,6 +425,7 @@ class _TimerScreenState extends State<TimerScreen>
       _cdRunning = true;
       _cdSecondsLeft = total;
     });
+    TimerKeepAlive.start();
     _startCdUiTick();
   }
 
@@ -450,6 +490,7 @@ class _TimerScreenState extends State<TimerScreen>
         baseTimeMs: chronometerBaseMs,
         countDown: false,
       );
+      TimerKeepAlive.start();
       setState(() => _swRunning = true);
       _startSwUiTick();
     }

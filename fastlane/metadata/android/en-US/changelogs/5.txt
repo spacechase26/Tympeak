@@ -1,0 +1,10 @@
+v1.2.0 — reliable background timers
+
+• Foreground service keeps the app's timer logic alive while the screen
+  is locked or the app is in recents. Pomodoro, countdown and stopwatch
+  notifications and sounds now fire correctly when the phone is locked
+  or backgrounded (no more reliance on battery-restricted scheduled
+  alarms). A small low-priority "Tympeak — timer active" notification
+  appears while any timer is running and disappears on reset / finish.
+• Pomodoro completion notification now fires reliably (was racing with
+  the scheduled-alarm cancel and silently dismissing itself).

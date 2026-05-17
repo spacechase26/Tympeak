@@ -36,6 +36,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Background-execution anchor for active timers (pomodoro / countdown /
+             stopwatch). Has no Dart code of its own; its sole purpose is to keep
+             the app process resident so the Flutter isolate's periodic timers
+             keep firing on devices that aggressively kill backgrounded apps. -->
+        <service
+            android:name=".TimerKeepAliveService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the user's Pomodoro / countdown / stopwatch accurate while the screen is off." />
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -49,6 +63,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
