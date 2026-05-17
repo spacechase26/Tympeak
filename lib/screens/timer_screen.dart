@@ -130,6 +130,10 @@ class _TimerScreenState extends State<TimerScreen>
     final nowMs     = DateTime.now().millisecondsSinceEpoch;
     final elapsedSec = (nowMs - startedMs) ~/ 1000;
 
+    final prevRound = _pomoRound;
+    final prevBreak = _pomoBreak;
+    final wasRunning = _pomoRunning;
+
     // Walk through segments to find current
     int cursor = 0;
     int round  = 1;
@@ -147,6 +151,7 @@ class _TimerScreenState extends State<TimerScreen>
             _pomoRunning = false; _pomoBreak = false; _pomoRound = 1;
             _pomoSegmentLeft = _focusMin * 60;
           });
+          if (wasRunning) _completionAlert();
           return;
         }
         inBreak = true;
@@ -156,6 +161,10 @@ class _TimerScreenState extends State<TimerScreen>
       }
     }
     final segLeft = segLen - (elapsedSec - cursor);
+
+    final transitioned = wasRunning && (prevRound != round || prevBreak != inBreak);
+    if (transitioned) _transitionAlert();
+
     setState(() {
       _focusMin = focusSec ~/ 60;
       _breakMin = breakSec ~/ 60;
@@ -169,6 +178,16 @@ class _TimerScreenState extends State<TimerScreen>
     _startPomoUiTick();
   }
 
+  void _completionAlert() {
+    HapticFeedback.heavyImpact();
+    SystemSound.play(SystemSoundType.alert);
+  }
+
+  void _transitionAlert() {
+    HapticFeedback.mediumImpact();
+    SystemSound.play(SystemSoundType.click);
+  }
+
   void _restoreCd(Map<String, dynamic> a) {
     final startedMs = a['startedMs'] as int;
     final totalSec  = a['totalSec']  as int;
@@ -176,8 +195,10 @@ class _TimerScreenState extends State<TimerScreen>
     final elapsedSec = (nowMs - startedMs) ~/ 1000;
     final left = totalSec - elapsedSec;
     if (left <= 0) {
+      final wasRunning = _cdRunning;
       _clearActive();
       setState(() { _cdRunning = false; _cdSecondsLeft = _cdSec; });
+      if (wasRunning) _completionAlert();
       return;
     }
     setState(() {
