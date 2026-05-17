@@ -7,7 +7,7 @@ import '../theme.dart';
 import '../widgets/glass_card.dart';
 
 final _googleSignIn = GoogleSignIn(
-  serverClientId: '956728111742-h99qdntql02urvjgndebe6gt23tijsmt.apps.googleusercontent.com',
+  serverClientId: '956728111742-d1ojl3kdtacctd6a5t9rpgsdreg67oc3.apps.googleusercontent.com',
   scopes: [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/calendar.events',
