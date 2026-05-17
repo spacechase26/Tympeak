@@ -5,13 +5,16 @@ import 'package:timezone/data/latest_10y.dart' as tz;
 
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
+  static String? lastError;
 
   static Future<void> init() async {
     tz.initializeTimeZones();
     try {
       final tzInfo = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
-    } catch (_) {}
+    } catch (e) {
+      lastError = 'tz init: $e';
+    }
 
     await _plugin.initialize(
       const InitializationSettings(
@@ -28,7 +31,7 @@ class NotificationService {
       enableVibration: true,
     );
     const timerChannel = AndroidNotificationChannel(
-      'timer_alerts_v2',
+      'timer_alerts_v3',
       'Timer Alerts',
       description: 'Pomodoro and countdown completions',
       importance: Importance.max,
@@ -47,7 +50,19 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
       await android?.requestExactAlarmsPermission();
-    } catch (_) {}
+    } catch (e) {
+      lastError = 'permission: $e';
+    }
+  }
+
+  static Future<bool> areNotificationsEnabled() async {
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      return await android?.areNotificationsEnabled() ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static const _taskDetails = NotificationDetails(
@@ -58,13 +73,14 @@ class NotificationService {
     ),
   );
 
+  // No fullScreenIntent — Android 14 restricts that to alarm-clock apps only
+  // and a denied permission can swallow the whole notification silently.
   static const _timerDetails = NotificationDetails(
     android: AndroidNotificationDetails(
-      'timer_alerts_v2', 'Timer Alerts',
+      'timer_alerts_v3', 'Timer Alerts',
       importance: Importance.max, priority: Priority.max,
       category: AndroidNotificationCategory.alarm,
       playSound: true, enableVibration: true,
-      fullScreenIntent: true,
       visibility: NotificationVisibility.public,
     ),
   );
@@ -81,7 +97,8 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: match,
       );
-    } catch (_) {
+    } catch (e) {
+      lastError = 'exact: $e';
       try {
         await _plugin.zonedSchedule(
           id, title, body, when, details,
@@ -90,7 +107,9 @@ class NotificationService {
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: match,
         );
-      } catch (_) {}
+      } catch (e2) {
+        lastError = 'exact+inexact: $e | $e2';
+      }
     }
   }
 
@@ -99,6 +118,16 @@ class NotificationService {
       int id, String title, String body, int secondsFromNow) async {
     final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: secondsFromNow));
     await _scheduleWithFallback(id, title, body, when, _timerDetails);
+  }
+
+  // Fire a notification right now — used as a reliable in-app completion alert
+  // (heads-up notification plays sound + vibration even when the app is open).
+  static Future<void> showTimerAlertNow(int id, String title, String body) async {
+    try {
+      await _plugin.show(id, title, body, _timerDetails);
+    } catch (e) {
+      lastError = 'show: $e';
+    }
   }
 
   // One-time reminder on a specific date + time.

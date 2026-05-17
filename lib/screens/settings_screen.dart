@@ -4,13 +4,44 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
+import '../data/notification_service.dart';
 import '../data/storage.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/screen_padding.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool? _notifEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshNotifStatus();
+  }
+
+  Future<void> _refreshNotifStatus() async {
+    final ok = await NotificationService.areNotificationsEnabled();
+    if (mounted) setState(() => _notifEnabled = ok);
+  }
+
+  Future<void> _testNotification() async {
+    await NotificationService.showTimerAlertNow(
+      999999, '🔔 Test notification', 'If you can see and hear this, alerts work.');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Test notification fired — check the tray.')));
+  }
+
+  Future<void> _requestPerms() async {
+    await NotificationService.requestPermissions();
+    await _refreshNotifStatus();
+  }
 
   void _confirmClear(BuildContext context, String label, VoidCallback onConfirm) {
     showDialog(
@@ -246,6 +277,36 @@ class SettingsScreen extends StatelessWidget {
                     const Text('Version 1.0.0', style: TextStyle(color: Colors.white38, fontSize: 12)),
                   ]),
                 ),
+              ]),
+            ),
+
+            const SizedBox(height: 20),
+            _sectionLabel('Notifications'),
+            const SizedBox(height: 10),
+
+            GlassCard(
+              padding: EdgeInsets.zero,
+              child: Column(children: [
+                _tile(
+                  context,
+                  icon: _notifEnabled == true ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+                  iconColor: _notifEnabled == true ? const Color(0xFF16A34A) : Colors.amber,
+                  label: _notifEnabled == true ? 'Notifications enabled' : 'Notifications disabled',
+                  sub: _notifEnabled == true
+                      ? 'Tap to send a test alert'
+                      : 'Tap to grant permission',
+                  onTap: _notifEnabled == true ? _testNotification : _requestPerms,
+                ),
+                if (NotificationService.lastError != null) ...[
+                  _divider(),
+                  _tile(
+                    context,
+                    icon: Icons.warning_amber_rounded,
+                    iconColor: Colors.red,
+                    label: 'Last error',
+                    sub: NotificationService.lastError!,
+                  ),
+                ],
               ]),
             ),
 

@@ -181,11 +181,19 @@ class _TimerScreenState extends State<TimerScreen>
   void _completionAlert() {
     HapticFeedback.heavyImpact();
     SystemSound.play(SystemSoundType.alert);
+    // Also fire an immediate heads-up notification — this is the reliable
+    // path for in-app sound (SystemSound.alert is silent on most Android builds).
+    NotificationService.showTimerAlertNow(
+      _kNotifBaseTimer + 1, '⏰ Time\'s up', 'Timer complete');
   }
 
   void _transitionAlert() {
     HapticFeedback.mediumImpact();
     SystemSound.play(SystemSoundType.click);
+    NotificationService.showTimerAlertNow(
+      _kNotifBaseTimer + 2,
+      _pomoBreak ? '☕ Break time' : '🎯 Back to focus',
+      'Round $_pomoRound of $_loops');
   }
 
   void _restoreCd(Map<String, dynamic> a) {
