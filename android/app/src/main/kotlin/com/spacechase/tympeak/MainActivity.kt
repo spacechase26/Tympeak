@@ -1,4 +1,4 @@
-package com.spacechase26.tympeak
+package com.spacechase.tympeak
 
 import io.flutter.embedding.android.FlutterActivity
 
