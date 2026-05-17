@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/screen_padding.dart';
 
 enum TimerTab { pomodoro, stopwatch, countdown }
 
@@ -217,7 +218,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
     final total = _pomoBreak ? _breakDuration : _pomoDuration;
     final progress = _pomoSecondsLeft / total;
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+      padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
       child: Column(children: [
         GlassCard(
           child: Column(children: [
@@ -277,7 +278,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
         const SizedBox(height: 12),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 100),
+            padding: EdgeInsets.only(bottom: navBottomPadding(context)),
             itemCount: _laps.length,
             itemBuilder: (_, i) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -302,7 +303,7 @@ class _TimerScreenState extends State<TimerScreen> with TickerProviderStateMixin
   Widget _cdContent() {
     final progress = _cdMinutes > 0 ? _cdSecondsLeft / (_cdMinutes * 60) : 1.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+      padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
       child: GlassCard(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (!_cdRunning && _cdSecondsLeft == _cdMinutes * 60) ...[

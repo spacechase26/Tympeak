@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../data/storage.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/screen_padding.dart';
 
 class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key});
@@ -177,7 +178,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
                     );
                   }
                   return ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                    padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
                     itemCount: keys.length,
                     itemBuilder: (_, i) {
                       final key = keys[i];

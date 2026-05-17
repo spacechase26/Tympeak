@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../data/storage.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/screen_padding.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
@@ -200,7 +201,7 @@ class _TasksScreenState extends State<TasksScreen> {
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+          padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
           children: [
             ...pending.map((key) => _todoItem(key, Map<String, dynamic>.from(box.get(key)))),
             if (done.isNotEmpty) ...[

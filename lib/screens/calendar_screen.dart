@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/screen_padding.dart';
 
 final _googleSignIn = GoogleSignIn(
   serverClientId: '956728111742-d1ojl3kdtacctd6a5t9rpgsdreg67oc3.apps.googleusercontent.com',
@@ -296,7 +297,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       onRefresh: _loadEvents,
       color: kPurple,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+        padding: EdgeInsets.fromLTRB(24, 0, 24, navBottomPadding(context)),
         itemCount: _events.length,
         itemBuilder: (_, i) {
           final event = _events[i];

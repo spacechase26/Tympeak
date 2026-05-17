@@ -7,6 +7,7 @@ import 'screens/tasks_screen.dart';
 import 'screens/habits_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/calendar_screen.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() async {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const TympeakApp());
@@ -50,19 +52,21 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
     HabitsScreen(),
     TimerScreen(),
     CalendarScreen(),
+    SettingsScreen(),
   ];
 
-  final _navItems = const [
+  static const _navItems = [
     (Icons.check_circle_outline_rounded, Icons.check_circle_rounded, 'Tasks'),
-    (Icons.repeat_rounded, Icons.repeat_rounded, 'Habits'),
-    (Icons.timer_outlined, Icons.timer_rounded, 'Timer'),
-    (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Calendar'),
+    (Icons.repeat_rounded,               Icons.repeat_rounded,        'Habits'),
+    (Icons.timer_outlined,               Icons.timer_rounded,         'Timer'),
+    (Icons.calendar_month_outlined,      Icons.calendar_month_rounded,'Calendar'),
+    (Icons.settings_outlined,            Icons.settings_rounded,      'Settings'),
   ];
 
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 160));
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
     _fadeCtrl.forward();
   }
@@ -82,6 +86,8 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+
     return Scaffold(
       backgroundColor: kBgDeep,
       extendBody: true,
@@ -91,30 +97,28 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
           FadeTransition(opacity: _fade, child: _screens[_index]),
         ],
       ),
-      bottomNavigationBar: _floatingNav(),
+      bottomNavigationBar: _floatingNav(bottomInset),
     );
   }
 
-  Widget _floatingNav() {
+  Widget _floatingNav(double bottomInset) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      // bottomInset accounts for the phone's system nav bar (gesture bar or buttons)
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomInset),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            height: 68,
+            height: 62,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withAlpha(28),
-                  Colors.white.withAlpha(12),
-                ],
+                colors: [Colors.white.withAlpha(30), Colors.white.withAlpha(12)],
               ),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: Colors.white.withAlpha(40), width: 1),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.white.withAlpha(36), width: 1),
             ),
             child: Row(
               children: List.generate(_navItems.length, (i) {
@@ -127,10 +131,10 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      margin: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
                       decoration: BoxDecoration(
-                        color: selected ? kPurple.withAlpha(180) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(28),
+                        color: selected ? kPurple.withAlpha(200) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(22),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -138,15 +142,15 @@ class _HomeShellState extends State<HomeShell> with TickerProviderStateMixin {
                           Icon(
                             selected ? item.$2 : item.$1,
                             color: selected ? Colors.white : Colors.white38,
-                            size: 20,
+                            size: 19,
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 1),
                           Text(
                             item.$3,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9,
                               color: selected ? Colors.white : Colors.white38,
-                              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
                             ),
                           ),
                         ],
@@ -169,41 +173,29 @@ class _AppBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Stack(
-        children: [
-          Container(color: kBgDeep),
-          Positioned(
-            top: -120,
-            left: -80,
-            child: Container(
-              width: 340,
-              height: 340,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  kPurple.withAlpha(70),
-                  Colors.transparent,
-                ]),
-              ),
+      child: Stack(children: [
+        Container(color: kBgDeep),
+        Positioned(
+          top: -100, left: -60,
+          child: Container(
+            width: 320, height: 320,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [kPurple.withAlpha(60), Colors.transparent]),
             ),
           ),
-          Positioned(
-            bottom: 80,
-            right: -100,
-            child: Container(
-              width: 280,
-              height: 280,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  const Color(0xFF1E40AF).withAlpha(50),
-                  Colors.transparent,
-                ]),
-              ),
+        ),
+        Positioned(
+          bottom: 120, right: -80,
+          child: Container(
+            width: 260, height: 260,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [kBlue.withAlpha(45), Colors.transparent]),
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
