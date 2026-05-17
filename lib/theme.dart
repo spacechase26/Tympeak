@@ -7,7 +7,7 @@ final appTheme = ThemeData(
     seedColor: const Color(0xFF7C3AED),
     brightness: Brightness.dark,
   ),
-  scaffoldBackgroundColor: const Color(0xFF0A0A0F),
+  scaffoldBackgroundColor: const Color(0xFF08080F),
   fontFamily: 'sans-serif',
   appBarTheme: const AppBarTheme(
     backgroundColor: Colors.transparent,
@@ -15,16 +15,21 @@ final appTheme = ThemeData(
     centerTitle: false,
     titleTextStyle: TextStyle(
       color: Colors.white,
-      fontSize: 26,
+      fontSize: 28,
       fontWeight: FontWeight.w700,
-      letterSpacing: -0.5,
+      letterSpacing: -0.8,
     ),
+  ),
+  inputDecorationTheme: const InputDecorationTheme(
+    border: InputBorder.none,
   ),
 );
 
-const kGlassColor = Color(0x1AFFFFFF);
-const kGlassBorder = Color(0x33FFFFFF);
-const kPurple = Color(0xFF7C3AED);
+const kPurple      = Color(0xFF7C3AED);
 const kPurpleLight = Color(0xFFA78BFA);
-const kBgDeep = Color(0xFF0A0A0F);
-const kBgCard = Color(0xFF13131A);
+const kPurpleDim   = Color(0xFF4C1D95);
+const kBlue        = Color(0xFF1E40AF);
+const kBgDeep      = Color(0xFF08080F);
+const kBgCard      = Color(0xFF111118);
+const kGlassColor  = Color(0x18FFFFFF);
+const kGlassBorder = Color(0x28FFFFFF);
