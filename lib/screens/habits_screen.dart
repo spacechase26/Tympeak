@@ -1,8 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../data/storage.dart';
+import '../data/habit_timer.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/screen_padding.dart';
@@ -308,8 +310,13 @@ class _HabitCard extends StatelessWidget {
                 ]),
               ])),
               const SizedBox(width: 8),
-              // Logging control
-              _LogControl(habit: habit, onLog: (d) => _log(context, d)),
+              // Logging control — type-aware
+              if (habit.type == 'yes_no')
+                _YesNoControl(habit: habit, onLog: (d) => _log(context, d))
+              else if (habit.type == 'count')
+                _CountControl(habit: habit, onLog: (d) => _log(context, d))
+              else
+                _TimerControl(habit: habit, onLog: (d) => _log(context, d)),
             ]),
           ),
         ),
@@ -376,73 +383,237 @@ class _HabitCard extends StatelessWidget {
   }
 }
 
-// ── Log Control (right side of card) ─────────────────────────────────────────
-class _LogControl extends StatelessWidget {
+// ── Log Control — Yes/No ──────────────────────────────────────────────────────
+class _YesNoControl extends StatelessWidget {
   final Habit habit;
-  final void Function(int delta) onLog;
-  const _LogControl({required this.habit, required this.onLog});
+  final void Function(int) onLog;
+  const _YesNoControl({required this.habit, required this.onLog});
 
   @override
   Widget build(BuildContext context) {
-    final type = habit.type;
+    final done = habit.doneToday;
+    return GestureDetector(
+      onTap: () => onLog(done ? -habit.target : habit.target),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutBack,
+        width: 42, height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: done ? LinearGradient(colors: [habit.color, habit.color.withAlpha(180)]) : null,
+          color: done ? null : Colors.white.withAlpha(12),
+          border: Border.all(color: done ? habit.color : Colors.white24, width: 1.5),
+        ),
+        child: Icon(done ? Icons.check_rounded : Icons.circle_outlined,
+            color: done ? Colors.white : Colors.white30, size: 22),
+      ),
+    );
+  }
+}
+
+// ── Log Control — Count ───────────────────────────────────────────────────────
+class _CountControl extends StatelessWidget {
+  final Habit habit;
+  final void Function(int) onLog;
+  const _CountControl({required this.habit, required this.onLog});
+
+  @override
+  Widget build(BuildContext context) {
     final cur  = habit.valueFor(DateTime.now());
     final done = habit.doneToday;
-
-    if (type == 'yes_no') {
-      return GestureDetector(
-        onTap: () => onLog(done ? -habit.target : habit.target),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: done ? LinearGradient(colors: [habit.color, habit.color.withAlpha(180)]) : null,
-            color: done ? null : Colors.white.withAlpha(12),
-            border: Border.all(color: done ? habit.color : Colors.white24, width: 1.5),
-          ),
-          child: Icon(done ? Icons.check_rounded : Icons.add_rounded, color: done ? Colors.white : Colors.white38, size: 20),
-        ),
-      );
-    }
-
-    // Count or time
-    final label = type == 'time_min' ? '${cur}m' : '$cur';
-    final subLabel = type == 'time_min' ? '/${habit.target}m' : '/${habit.target}';
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      // Progress ring
-      SizedBox(
-        width: 44, height: 44,
-        child: Stack(alignment: Alignment.center, children: [
-          CircularProgressIndicator(
-            value: (cur / habit.target).clamp(0.0, 1.0),
-            strokeWidth: 3,
-            backgroundColor: Colors.white10,
-            valueColor: AlwaysStoppedAnimation(done ? habit.color : habit.color.withAlpha(180)),
-          ),
-          Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(label, style: TextStyle(color: done ? habit.color : Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
-            Text(subLabel, style: const TextStyle(color: Colors.white30, fontSize: 8)),
-          ]),
+      _btn(Icons.remove_rounded, () => onLog(-1), habit.color, outline: true),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('$cur',
+            style: TextStyle(
+              color: done ? habit.color : Colors.white,
+              fontSize: 22, fontWeight: FontWeight.w800,
+            )),
+          Text('/${habit.target}',
+            style: const TextStyle(color: Colors.white38, fontSize: 12)),
         ]),
       ),
-      const SizedBox(width: 6),
-      Column(mainAxisSize: MainAxisSize.min, children: [
-        _mini(Icons.add_rounded, () => onLog(type == 'time_min' ? 5 : 1)),
-        const SizedBox(height: 4),
-        _mini(Icons.remove_rounded, () => onLog(type == 'time_min' ? -5 : -1)),
-      ]),
+      _btn(Icons.add_rounded, () => onLog(1), habit.color),
     ]);
   }
 
-  Widget _mini(IconData icon, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 26, height: 26,
-      decoration: BoxDecoration(color: Colors.white.withAlpha(10), borderRadius: BorderRadius.circular(6)),
-      child: Icon(icon, color: Colors.white54, size: 14),
-    ),
-  );
+  Widget _btn(IconData icon, VoidCallback onTap, Color color, {bool outline = false}) =>
+    GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34, height: 34,
+        decoration: BoxDecoration(
+          color: outline ? Colors.transparent : color.withAlpha(220),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withAlpha(outline ? 80 : 220)),
+        ),
+        child: Icon(icon, color: outline ? color : Colors.white, size: 18),
+      ),
+    );
+}
+
+// ── Log Control — Timer ───────────────────────────────────────────────────────
+class _TimerControl extends StatefulWidget {
+  final Habit habit;
+  final void Function(int) onLog;
+  const _TimerControl({required this.habit, required this.onLog});
+
+  @override
+  State<_TimerControl> createState() => _TimerControlState();
+}
+
+class _TimerControlState extends State<_TimerControl> {
+  final _mgr = HabitTimerManager.instance;
+
+  int get _defaultSecs => widget.habit.target * 60;
+
+  void _start() {
+    _mgr.start(widget.habit.key, _defaultSecs, () {
+      if (mounted) setState(() {});
+      widget.onLog(widget.habit.target);
+      HapticFeedback.heavyImpact();
+    });
+    setState(() {});
+  }
+
+  void _pause() { _mgr.pause(widget.habit.key); setState(() {}); }
+
+  void _reset(int secs) { _mgr.reset(widget.habit.key, secs); setState(() {}); }
+
+  void _pickDuration(BuildContext ctx, int currentSecs) {
+    final ctrl = TextEditingController(text: '${currentSecs ~/ 60}');
+    showDialog(
+      context: ctx,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Set duration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(
+            suffixText: 'min',
+            suffixStyle: TextStyle(color: Colors.white38, fontSize: 16),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: kPurple)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
+          ElevatedButton(
+            onPressed: () {
+              final m = int.tryParse(ctrl.text) ?? (currentSecs ~/ 60);
+              if (m > 0) _reset(m * 60);
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: kPurple, foregroundColor: Colors.white, elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.habit.doneToday) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: widget.habit.color.withAlpha(30),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: widget.habit.color.withAlpha(80)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.check_rounded, color: widget.habit.color, size: 15),
+          const SizedBox(width: 5),
+          Text('Done!', style: TextStyle(color: widget.habit.color, fontWeight: FontWeight.w700, fontSize: 12)),
+        ]),
+      );
+    }
+
+    return ValueListenableBuilder(
+      valueListenable: _mgr.notifier(widget.habit.key, _defaultSecs),
+      builder: (ctx, state, _) {
+        final secs    = state.seconds;
+        final running = state.running;
+        final total   = _defaultSecs;
+        final pct     = total > 0 ? 1 - (secs / total) : 0.0;
+        final mm      = (secs ~/ 60).toString().padLeft(2, '0');
+        final ss      = (secs % 60).toString().padLeft(2, '0');
+
+        return SizedBox(
+          width: 100,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // Timer display — tap to edit when not running
+            GestureDetector(
+              onTap: running ? null : () => _pickDuration(ctx, secs),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('$mm:$ss',
+                  style: TextStyle(
+                    color: running ? widget.habit.color : Colors.white70,
+                    fontSize: 18, fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  )),
+                if (!running) ...[
+                  const SizedBox(width: 3),
+                  const Icon(Icons.edit_rounded, color: Colors.white24, size: 10),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 4),
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: pct, minHeight: 3,
+                backgroundColor: Colors.white10,
+                valueColor: AlwaysStoppedAnimation(widget.habit.color),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Controls
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              if (running) ...[
+                _ctl(Icons.refresh_rounded, () => _reset(total), small: true),
+                const SizedBox(width: 6),
+              ],
+              _ctl(
+                running ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                running ? _pause : _start,
+                filled: true,
+                color: widget.habit.color,
+              ),
+            ]),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _ctl(IconData icon, VoidCallback onTap, {bool filled = false, bool small = false, Color? color}) {
+    final sz = small ? 26.0 : 32.0;
+    final c  = color ?? kPurple;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: sz, height: sz,
+        decoration: BoxDecoration(
+          color: filled ? c : Colors.white.withAlpha(12),
+          borderRadius: BorderRadius.circular(8),
+          border: filled ? null : Border.all(color: Colors.white.withAlpha(20)),
+        ),
+        child: Icon(icon, color: Colors.white, size: sz * 0.52),
+      ),
+    );
+  }
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
