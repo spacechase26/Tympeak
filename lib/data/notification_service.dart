@@ -25,9 +25,40 @@ class NotificationService {
       description: 'Reminders for your tasks',
       importance: Importance.high,
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    const timerChannel = AndroidNotificationChannel(
+      'timer_alerts',
+      'Timer Alerts',
+      description: 'Pomodoro and countdown completions',
+      importance: Importance.high,
+    );
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(channel);
+    await android?.createNotificationChannel(timerChannel);
+  }
+
+  // Fire a notification N seconds from now.
+  static Future<void> scheduleTimerAlert(
+      int id, String title, String body, int secondsFromNow) async {
+    try {
+      final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: secondsFromNow));
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        when,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'timer_alerts', 'Timer Alerts',
+            importance: Importance.high, priority: Priority.high,
+            category: AndroidNotificationCategory.alarm,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (_) {}
   }
 
   static Future<void> requestPermissions() async {
