@@ -139,7 +139,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      onPopInvoked: (didPop) { if (didPop) { _saveTimer?.cancel(); _flush(); } },
+      onPopInvokedWithResult: (didPop, _) { if (didPop) { _saveTimer?.cancel(); _flush(); } },
       child: Scaffold(
         backgroundColor: kBgDeep,
         appBar: AppBar(

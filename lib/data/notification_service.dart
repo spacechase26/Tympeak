@@ -138,6 +138,8 @@ class NotificationService {
   }
 
   static Future<void> cancelAll(List<int> ids) async {
-    for (final id in ids) await cancel(id);
+    for (final id in ids) {
+      await cancel(id);
+    }
   }
 }

@@ -13,7 +13,6 @@ import 'note_editor_screen.dart';
 String _dateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
 
-String _todayKey()  => 'journal_${_dateKey(DateTime.now())}';
 String _journalKey(DateTime d) => 'journal_${_dateKey(d)}';
 
 Map<String, dynamic> _journalEntryOf(dynamic raw) {
@@ -57,9 +56,6 @@ Color _accentColor(String c) => switch (c) {
   'amber'  => const Color(0xFFF59E0B),
   _        => Colors.transparent,
 };
-
-const _kNoteColorKeys  = ['none', 'purple', 'blue', 'green', 'amber'];
-const _kNoteColorPaint = [Colors.white24, kPurple, kBlue, Color(0xFF16A34A), Color(0xFFF59E0B)];
 
 const _kMoods = [('😄','great'), ('🙂','good'), ('😐','okay'), ('😔','sad'), ('😤','rough')];
 
@@ -371,7 +367,7 @@ class _QuickNotesTabState extends State<QuickNotesTab> {
 
   List<MapEntry<String, Map<String, dynamic>>> _filtered(Box box) {
     final all = box.keys
-        .where((k) => k is String && !(k as String).startsWith('journal_'))
+        .where((k) => k is String && !k.startsWith('journal_'))
         .map((k) => MapEntry(k as String, Map<String, dynamic>.from(box.get(k) as Map)))
         .toList();
 

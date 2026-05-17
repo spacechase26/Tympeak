@@ -1,0 +1,29 @@
+A no-nonsense productivity app — built in a day, refined into a final release.
+
+<b>Tasks</b>
+• Priorities, due dates, recurring days, custom reminder times
+• Swipe to delete with confirmation
+• Notifications fire even when the app is closed
+
+<b>Habits</b>
+• Yes/no, countable, and timer-based habit types
+• Streaks, weekly heatmap, confetti on a perfect day
+• Import / export as CSV
+
+<b>Pomodoro Timer</b>
+• Editable focus, break, and loop count
+• Quick-start countdown presets (1m, 5m, 10m, 15m, 25m, 45m, 60m, custom)
+• Stopwatch with laps
+• Timers keep running even when the app is killed — scheduled notifications fire at the exact moment
+
+<b>Notes</b>
+• Daily Journal with mood tracking and writing-streak badge
+• Quick Notes with autosave, search, pin, archive, and markdown editor
+• Export / import the whole notes box as JSON
+
+<b>Privacy</b>
+• 100% offline — no accounts, no cloud, no analytics, no tracking, no internet permission
+• All data stored locally with Hive
+• Open source
+
+Glassmorphism dark UI, floating nav bar, edge-to-edge. Designed so every action takes minimal taps.

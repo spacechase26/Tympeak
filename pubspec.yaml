@@ -1,7 +1,9 @@
 name: tympeak
-description: Productivity app — Tasks, Habits, Timer, Calendar
+description: Offline productivity app — Tasks, Habits, Timer, Notes. 100% local.
 publish_to: 'none'
 version: 1.0.0+1
+homepage: https://github.com/spacechase26/Tympeak
+repository: https://github.com/spacechase26/Tympeak.git
 
 environment:
   sdk: ^3.11.5

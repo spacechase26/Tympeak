@@ -3,7 +3,7 @@ import http.server
 import socketserver
 import os
 
-PORT = 8889
+PORT = 8890
 APK_PATH = '/home/coder/Tympeak/build/app/outputs/flutter-apk/app-release.apk'
 APK_NAME = 'Tympeak.apk'
 
@@ -25,6 +25,7 @@ class APKHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f'[apk] {self.address_string()} {fmt % args}')
 
+socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(('0.0.0.0', PORT), APKHandler) as httpd:
     print(f'Serving APK at http://0.0.0.0:{PORT}/')
     httpd.serve_forever()

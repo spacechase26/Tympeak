@@ -11,7 +11,7 @@ class HabitTimerManager {
   _HTimer _get(String key, int defaultSecs) =>
       _map.putIfAbsent(key, () => _HTimer(defaultSecs));
 
-  ValueNotifier<_HTimerState> notifier(String key, int defaultSecs) =>
+  ValueNotifier<HTimerState> notifier(String key, int defaultSecs) =>
       _get(key, defaultSecs).notifier;
 
   bool isRunning(String key) => _map[key]?.notifier.value.running ?? false;
@@ -24,42 +24,46 @@ class HabitTimerManager {
   void reset(String key, int secs) => _get(key, secs).reset(secs);
 }
 
-class _HTimerState {
+class HTimerState {
   final int seconds;
   final bool running;
-  const _HTimerState(this.seconds, {this.running = false});
+  const HTimerState(this.seconds, {this.running = false});
 }
 
+// Internal — not part of the public API
+// ignore_for_file: library_private_types_in_public_api
+
+
 class _HTimer {
-  late ValueNotifier<_HTimerState> notifier;
+  late ValueNotifier<HTimerState> notifier;
   Timer? _timer;
 
   _HTimer(int secs) {
-    notifier = ValueNotifier(_HTimerState(secs));
+    notifier = ValueNotifier(HTimerState(secs));
   }
 
   void start(VoidCallback onDone) {
     if (notifier.value.running || notifier.value.seconds <= 0) return;
-    notifier.value = _HTimerState(notifier.value.seconds, running: true);
+    notifier.value = HTimerState(notifier.value.seconds, running: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final next = notifier.value.seconds - 1;
       if (next <= 0) {
         _timer?.cancel();
-        notifier.value = const _HTimerState(0, running: false);
+        notifier.value = const HTimerState(0, running: false);
         onDone();
       } else {
-        notifier.value = _HTimerState(next, running: true);
+        notifier.value = HTimerState(next, running: true);
       }
     });
   }
 
   void pause() {
     _timer?.cancel();
-    notifier.value = _HTimerState(notifier.value.seconds, running: false);
+    notifier.value = HTimerState(notifier.value.seconds, running: false);
   }
 
   void reset(int secs) {
     _timer?.cancel();
-    notifier.value = _HTimerState(secs, running: false);
+    notifier.value = HTimerState(secs, running: false);
   }
 }

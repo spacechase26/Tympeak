@@ -1,0 +1,7 @@
+Initial release.
+
+• Tasks with priorities, due dates, recurring schedules and notification reminders
+• Habits with yes/no, count, and timer types — streaks + weekly heatmap
+• Pomodoro timer with editable focus / break / loop count + background-safe notifications
+• Daily Journal with mood + streak; Quick Notes with markdown, search, pin, archive
+• 100% offline, no tracking, no Google deps

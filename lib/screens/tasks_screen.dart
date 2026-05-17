@@ -692,7 +692,7 @@ class _AddRowState extends State<_AddRow> {
 // ── Task item ─────────────────────────────────────────────────────────────────
 class _TaskItem extends StatelessWidget {
   final _Task task;
-  const _TaskItem({required this.task, super.key});
+  const _TaskItem({required this.task});
 
   Future<void> _toggle() async {
     final data = Map<String, dynamic>.from(task.raw);

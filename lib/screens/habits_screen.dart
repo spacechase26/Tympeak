@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -727,7 +726,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
     final Map<String, dynamic> data = {
       'name':       _name.text.trim(),
       'emoji':      _emoji,
-      'color':      _color.value,
+      'color':      _color.toARGB32(),
       'type':       _type,
       'target':     _target,
       'schedule':   _schedule,
