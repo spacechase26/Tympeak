@@ -38,9 +38,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const SnackBar(content: Text('Test notification fired — check the tray.')));
   }
 
+  Future<void> _testScheduled() async {
+    await NotificationService.scheduleTimerAlert(
+      999998, '⏳ Scheduled test (30s)',
+      'Fired by the alarm scheduler — if you don\'t see this, battery saver is blocking alarms.',
+      30);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Scheduled — lock the phone and wait 30s.')));
+  }
+
   Future<void> _requestPerms() async {
     await NotificationService.requestPermissions();
     await _refreshNotifStatus();
+  }
+
+  void _showBatteryHelp() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Allow background alerts',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'If timer / pomodoro / task notifications only fire when the app is '
+          'open, your phone is killing scheduled alarms in the background.\n\n'
+          'Open phone Settings, then:\n\n'
+          '• Apps → Tympeak → Battery → Unrestricted (or "No restrictions")\n'
+          '• Apps → Tympeak → Autostart → Enabled (Xiaomi / MIUI only)\n'
+          '• Apps → Tympeak → Notifications → keep all channels enabled\n\n'
+          'Once that\'s done, hit "Schedule test" to verify.',
+          style: TextStyle(color: Colors.white70, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it', style: TextStyle(color: kPurpleLight)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmClear(BuildContext context, String label, VoidCallback onConfirm) {
@@ -293,9 +330,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   iconColor: _notifEnabled == true ? const Color(0xFF16A34A) : Colors.amber,
                   label: _notifEnabled == true ? 'Notifications enabled' : 'Notifications disabled',
                   sub: _notifEnabled == true
-                      ? 'Tap to send a test alert'
+                      ? 'Tap to send an instant test alert'
                       : 'Tap to grant permission',
                   onTap: _notifEnabled == true ? _testNotification : _requestPerms,
+                ),
+                _divider(),
+                _tile(
+                  context,
+                  icon: Icons.schedule_rounded,
+                  iconColor: const Color(0xFF0891B2),
+                  label: 'Schedule test (30s)',
+                  sub: 'Verifies that background alerts still fire',
+                  onTap: _testScheduled,
+                ),
+                _divider(),
+                _tile(
+                  context,
+                  icon: Icons.battery_saver_rounded,
+                  iconColor: Colors.amber,
+                  label: 'Background alerts not working?',
+                  sub: 'Disable battery optimization for Tympeak',
+                  onTap: _showBatteryHelp,
                 ),
                 if (NotificationService.lastError != null) ...[
                   _divider(),

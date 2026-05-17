@@ -1,0 +1,9 @@
+v1.1.1
+
+• In-app pomodoro now updates the live notification AND plays the ding
+  at every segment boundary — works even when the OS kills scheduled
+  alarms (Xiaomi / MIUI battery saver)
+• Countdown plays the ding at completion in foreground too
+• Settings → Notifications gains:
+  - "Schedule test (30s)" to verify background alerts
+  - "Background alerts not working?" with battery-optimization help

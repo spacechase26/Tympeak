@@ -135,7 +135,6 @@ class _TimerScreenState extends State<TimerScreen>
     final prevBreak = _pomoBreak;
     final wasRunning = _pomoRunning;
 
-    // Walk through segments to find current
     int cursor = 0;
     int round  = 1;
     bool inBreak = false;
@@ -146,13 +145,20 @@ class _TimerScreenState extends State<TimerScreen>
       cursor += segLen;
       if (!inBreak) {
         if (round == loops) {
-          // All done — final focus finished
+          // All rounds done.
           _clearActive();
           setState(() {
             _pomoRunning = false; _pomoBreak = false; _pomoRound = 1;
             _pomoSegmentLeft = _focusMin * 60;
           });
-          if (wasRunning) _completionAlert();
+          if (wasRunning) {
+            HapticFeedback.heavyImpact();
+            NotificationService.showTimerAlertNow(
+              _kNotifBaseTimer + 9000,
+              '🎉 Pomodoro complete',
+              '$loops rounds done. Great work!',
+            );
+          }
           return;
         }
         inBreak = true;
@@ -161,10 +167,32 @@ class _TimerScreenState extends State<TimerScreen>
         round++;
       }
     }
-    final segLeft = segLen - (elapsedSec - cursor);
+    final segLeft  = segLen - (elapsedSec - cursor);
+    final segEndMs = startedMs + (cursor + segLen) * 1000;
 
+    // In-foreground transition fallback: when scheduled OS replacements don't
+    // fire (battery-optimised devices), the live notification has to be updated
+    // from in-app or it sticks on the wrong segment with a chronometer going
+    // past zero.
     final transitioned = wasRunning && (prevRound != round || prevBreak != inBreak);
-    if (transitioned) _transitionAlert();
+    if (transitioned) {
+      HapticFeedback.mediumImpact();
+      NotificationService.showLiveChronometer(
+        title: inBreak
+            ? '☕ Break $round/${loops - 1}'
+            : '🎯 Focus $round/$loops',
+        body: 'Tympeak — Pomodoro running',
+        baseTimeMs: segEndMs,
+        countDown: true,
+      );
+      NotificationService.showTimerAlertNow(
+        inBreak
+            ? _kNotifBaseTimer + round * 2
+            : _kNotifBaseTimer + (round - 1) * 2 + 1,
+        inBreak ? '☕ Break time' : '🎯 Back to focus',
+        'Round $round of $loops',
+      );
+    }
 
     setState(() {
       _focusMin = focusSec ~/ 60;
@@ -179,17 +207,6 @@ class _TimerScreenState extends State<TimerScreen>
     _startPomoUiTick();
   }
 
-  // Scheduled OS notifications handle the audible alert (custom ding sound
-  // via the channel). In-app handlers only do haptics so the user doesn't
-  // get a double-ding when they're looking at the screen.
-  void _completionAlert() {
-    HapticFeedback.heavyImpact();
-  }
-
-  void _transitionAlert() {
-    HapticFeedback.mediumImpact();
-  }
-
   void _restoreCd(Map<String, dynamic> a) {
     final startedMs = a['startedMs'] as int;
     final totalSec  = a['totalSec']  as int;
@@ -200,7 +217,14 @@ class _TimerScreenState extends State<TimerScreen>
       final wasRunning = _cdRunning;
       _clearActive();
       setState(() { _cdRunning = false; _cdSecondsLeft = _cdSec; });
-      if (wasRunning) _completionAlert();
+      if (wasRunning) {
+        HapticFeedback.heavyImpact();
+        NotificationService.showTimerAlertNow(
+          _kNotifBaseTimer + 9999,
+          '⏰ Time\'s up',
+          'Countdown complete',
+        );
+      }
       return;
     }
     setState(() {
