@@ -51,3 +51,4 @@ android/key.properties
 *.keystore
 key.properties
 android/.kotlin/
+public/

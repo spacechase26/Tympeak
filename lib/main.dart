@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'data/storage.dart';
 import 'data/notification_service.dart';
 import 'theme.dart';
@@ -15,6 +16,35 @@ void main() async {
   await Storage.init();
   await NotificationService.init();
   await NotificationService.requestPermissions();
+
+  // Communication port for messages from the background timer isolate.
+  // Must be initialized before any FlutterForegroundTask.startService call.
+  FlutterForegroundTask.initCommunicationPort();
+  FlutterForegroundTask.init(
+    androidNotificationOptions: AndroidNotificationOptions(
+      channelId: 'tympeak_keepalive',
+      channelName: 'Tympeak (background)',
+      channelDescription:
+          'Keeps timers running when the app is in the background.',
+      channelImportance: NotificationChannelImportance.LOW,
+      priority: NotificationPriority.LOW,
+      onlyAlertOnce: true,
+    ),
+    iosNotificationOptions: const IOSNotificationOptions(
+      showNotification: false,
+      playSound: false,
+    ),
+    foregroundTaskOptions: ForegroundTaskOptions(
+      // 1s tick — accurate enough for second-precision countdowns without
+      // burning battery.
+      eventAction: ForegroundTaskEventAction.repeat(1000),
+      autoRunOnBoot: false,
+      autoRunOnMyPackageReplaced: true,
+      allowWakeLock: true,
+      allowWifiLock: false,
+    ),
+  );
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,

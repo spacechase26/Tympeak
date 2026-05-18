@@ -1,18 +1,52 @@
-import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'timer_task.dart';
 
-/// Thin wrapper around the native foreground service. Call `start()` whenever
-/// a user-facing timer becomes active and `stop()` when it ends or resets.
-/// While the service is running the OS keeps the app process resident, so
-/// the Dart isolate's periodic timers continue firing even when the screen
-/// is locked or the app has been swiped from recents.
+/// Wrapper around the `flutter_foreground_task` plugin. The plugin runs the
+/// timer logic in a *separate* Dart isolate (spawned by the foreground
+/// service), which survives the main isolate being killed when the user
+/// swipes the app from recents on aggressive OEMs (MIUI, OneUI, etc.).
+///
+/// Main isolate writes the active-timer state via [start] / [update], and
+/// the background `TimerTaskHandler` reads it through the plugin's shared
+/// storage. [stop] tears the service down on reset / completion.
 class TimerKeepAlive {
-  static const _ch = MethodChannel('com.spacechase.tympeak/keepalive');
+  static const int _kServiceId = 900099;
 
-  static Future<void> start() async {
-    try { await _ch.invokeMethod('start'); } catch (_) {}
+  static Future<void> start(Map<String, dynamic> active) async {
+    await FlutterForegroundTask.saveData(
+      key: kActiveTimerKey,
+      value: jsonEncode(active),
+    );
+    if (await FlutterForegroundTask.isRunningService) {
+      FlutterForegroundTask.sendDataToTask({'cmd': kCmdRefresh});
+      return;
+    }
+    await FlutterForegroundTask.startService(
+      serviceId: _kServiceId,
+      notificationTitle: 'Tympeak — timer active',
+      notificationText:  'Keeps your timer accurate when the screen is off.',
+      callback: startTimerTaskCallback,
+    );
+  }
+
+  /// Push a state change (eg. stopwatch pause/resume/lap) without restarting
+  /// the service. The handler re-reads `active_timer` and re-posts the live
+  /// notification with the new chronometer base.
+  static Future<void> update(Map<String, dynamic> active) async {
+    await FlutterForegroundTask.saveData(
+      key: kActiveTimerKey,
+      value: jsonEncode(active),
+    );
+    if (await FlutterForegroundTask.isRunningService) {
+      FlutterForegroundTask.sendDataToTask({'cmd': kCmdRefresh});
+    }
   }
 
   static Future<void> stop() async {
-    try { await _ch.invokeMethod('stop'); } catch (_) {}
+    await FlutterForegroundTask.saveData(key: kActiveTimerKey, value: '');
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
   }
 }

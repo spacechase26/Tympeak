@@ -1,0 +1,10 @@
+v1.3.0 — survives app being swiped from recents
+
+• Replaced the bare-bones foreground service with a dedicated background
+  Dart isolate (via flutter_foreground_task). The new isolate keeps
+  running independently of the main UI isolate, so timers continue to
+  fire notifications even when the app is force-closed from the recents
+  list on Xiaomi / MIUI / OneUI and other aggressive task killers.
+• Live chronometer, segment transitions and final completion alerts are
+  now all owned by the background isolate, eliminating the previous
+  "two isolates fighting over the same notification" races.

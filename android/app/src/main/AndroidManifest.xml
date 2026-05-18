@@ -37,19 +37,16 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Background-execution anchor for active timers (pomodoro / countdown /
-             stopwatch). Has no Dart code of its own; its sole purpose is to keep
-             the app process resident so the Flutter isolate's periodic timers
-             keep firing on devices that aggressively kill backgrounded apps. -->
+        <!-- Foreground service for active timers (pomodoro / countdown /
+             stopwatch). Spawned by flutter_foreground_task plugin; its
+             dedicated Dart isolate survives the main isolate being killed
+             when the user swipes the app from recents on aggressive OEMs
+             (MIUI, OneUI, etc.). -->
         <service
-            android:name=".TimerKeepAliveService"
-            android:foregroundServiceType="specialUse"
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
             android:exported="false"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the user's Pomodoro / countdown / stopwatch accurate while the screen is off." />
-        </service>
+            android:stopWithTask="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -64,7 +61,8 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

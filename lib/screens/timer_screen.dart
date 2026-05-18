@@ -3,16 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/keep_alive.dart';
-import '../data/notification_service.dart';
 import '../data/storage.dart';
 import '../theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/screen_padding.dart';
 
 enum TimerTab { pomodoro, stopwatch, countdown }
-
-// Notification ID range reserved for timers (separate from task reminders)
-const int _kNotifBaseTimer = 900000;
 
 class TimerScreen extends StatefulWidget {
   const TimerScreen({super.key});
@@ -93,68 +89,34 @@ class _TimerScreenState extends State<TimerScreen>
   }
 
   void _clearActive() {
-    final active = _getActive();
-    if (active != null) {
-      final ids = List<int>.from(active['notifIds'] as List? ?? []);
-      NotificationService.cancelAll(ids);
-    }
-    NotificationService.cancelLive();
     Storage.pomodoro.delete('active');
     TimerKeepAlive.stop();
   }
 
-  // Pomodoro all-done. Must await the cancel of the scheduled completion
-  // alert before showing the immediate one, otherwise the cancel can land
-  // *after* the show and silently dismiss our completion notification.
-  Future<void> _firePomoCompletion(
-      Map<String, dynamic> a, bool wasRunning, int loops) async {
-    const completionId = _kNotifBaseTimer + 9000;
-
-    await NotificationService.cancel(completionId);
-    final ids = List<int>.from(a['notifIds'] as List? ?? [])..remove(completionId);
-    await NotificationService.cancelAll(ids);
-    await NotificationService.cancelLive();
+  // Pomodoro naturally completed (detected by the UI ticker). All
+  // notification-firing is the background task handler's job — main isolate
+  // just resets UI state and stops the keep-alive service. Background
+  // handler may have already fired the completion alert via its own
+  // detection; calling stop() is idempotent.
+  Future<void> _firePomoCompletion(bool wasRunning) async {
     Storage.pomodoro.delete('active');
-    TimerKeepAlive.stop();
+    await TimerKeepAlive.stop();
 
     if (!mounted) return;
     setState(() {
       _pomoRunning = false; _pomoBreak = false; _pomoRound = 1;
       _pomoSegmentLeft = _focusMin * 60;
     });
-
-    if (wasRunning) {
-      HapticFeedback.heavyImpact();
-      await NotificationService.showTimerAlertNow(
-        completionId,
-        '🎉 Pomodoro complete',
-        '$loops rounds done. Great work!',
-      );
-    }
+    if (wasRunning) HapticFeedback.heavyImpact();
   }
 
-  Future<void> _fireCdCompletion(
-      Map<String, dynamic> a, bool wasRunning) async {
-    const completionId = _kNotifBaseTimer + 9999;
-
-    await NotificationService.cancel(completionId);
-    final ids = List<int>.from(a['notifIds'] as List? ?? [])..remove(completionId);
-    await NotificationService.cancelAll(ids);
-    await NotificationService.cancelLive();
+  Future<void> _fireCdCompletion(bool wasRunning) async {
     Storage.pomodoro.delete('active');
-    TimerKeepAlive.stop();
+    await TimerKeepAlive.stop();
 
     if (!mounted) return;
     setState(() { _cdRunning = false; _cdSecondsLeft = _cdSec; });
-
-    if (wasRunning) {
-      HapticFeedback.heavyImpact();
-      await NotificationService.showTimerAlertNow(
-        completionId,
-        '⏰ Time\'s up',
-        'Countdown complete',
-      );
-    }
+    if (wasRunning) HapticFeedback.heavyImpact();
   }
 
   // On (re)entry, look at stored active state and restore UI.
@@ -172,9 +134,9 @@ class _TimerScreenState extends State<TimerScreen>
       });
       return;
     }
-    // A timer is active — make sure the keep-alive foreground service is up
-    // so the OS doesn't kill the Dart isolate while the screen is locked.
-    TimerKeepAlive.start();
+    // A timer is active — make sure the background isolate is running so
+    // notifications keep firing if the user locks / swipes the app away.
+    TimerKeepAlive.start(a);
     switch (a['type'] as String) {
       case 'pomodoro':   _restorePomo(a);   break;
       case 'countdown':  _restoreCd(a);     break;
@@ -204,9 +166,7 @@ class _TimerScreenState extends State<TimerScreen>
       cursor += segLen;
       if (!inBreak) {
         if (round == loops) {
-          // All rounds done — must await cancel before show on the same ID,
-          // or the late-arriving cancel silently kills our completion alert.
-          _firePomoCompletion(a, wasRunning, loops);
+          _firePomoCompletion(wasRunning);
           return;
         }
         inBreak = true;
@@ -215,32 +175,12 @@ class _TimerScreenState extends State<TimerScreen>
         round++;
       }
     }
-    final segLeft  = segLen - (elapsedSec - cursor);
-    final segEndMs = startedMs + (cursor + segLen) * 1000;
+    final segLeft = segLen - (elapsedSec - cursor);
 
-    // In-foreground transition fallback: when scheduled OS replacements don't
-    // fire (battery-optimised devices), the live notification has to be updated
-    // from in-app or it sticks on the wrong segment with a chronometer going
-    // past zero.
+    // Visual segment transition — haptic only. Background isolate owns the
+    // notification side of the transition.
     final transitioned = wasRunning && (prevRound != round || prevBreak != inBreak);
-    if (transitioned) {
-      HapticFeedback.mediumImpact();
-      NotificationService.showLiveChronometer(
-        title: inBreak
-            ? '☕ Break $round/${loops - 1}'
-            : '🎯 Focus $round/$loops',
-        body: 'Tympeak — Pomodoro running',
-        baseTimeMs: segEndMs,
-        countDown: true,
-      );
-      NotificationService.showTimerAlertNow(
-        inBreak
-            ? _kNotifBaseTimer + round * 2
-            : _kNotifBaseTimer + (round - 1) * 2 + 1,
-        inBreak ? '☕ Break time' : '🎯 Back to focus',
-        'Round $round of $loops',
-      );
-    }
+    if (transitioned) HapticFeedback.mediumImpact();
 
     setState(() {
       _focusMin = focusSec ~/ 60;
@@ -262,7 +202,7 @@ class _TimerScreenState extends State<TimerScreen>
     final elapsedSec = (nowMs - startedMs) ~/ 1000;
     final left = totalSec - elapsedSec;
     if (left <= 0) {
-      _fireCdCompletion(a, _cdRunning);
+      _fireCdCompletion(_cdRunning);
       return;
     }
     setState(() {
@@ -293,76 +233,20 @@ class _TimerScreenState extends State<TimerScreen>
   // ── Pomodoro control ──────────────────────────────────────────────────────
   void _startPomo() {
     _clearActive();
-    final focusSec = _focusMin * 60;
-    final breakSec = _breakMin * 60;
-    final loops    = _loops;
+    final focusSec  = _focusMin * 60;
+    final breakSec  = _breakMin * 60;
+    final loops     = _loops;
     final startedMs = DateTime.now().millisecondsSinceEpoch;
     _saveConfig();
 
-    // ── 1. Initial live chronometer for the first focus segment (silent post)
-    NotificationService.showLiveChronometer(
-      title: '🎯 Focus 1/$loops',
-      body: 'Tympeak — Pomodoro running',
-      baseTimeMs: startedMs + focusSec * 1000,
-      countDown: true,
-    );
-
-    // ── 2. Schedule a replacement of the live chronometer at every segment
-    //      boundary AND schedule the per-transition alerts (sound).
-    final notifIds = <int>[NotificationService.kLiveTimerId];
-    int cursorSec = 0;
-    for (int r = 1; r <= loops; r++) {
-      cursorSec += focusSec;
-      if (r == loops) {
-        // Final completion — replace live with a dismissable "complete" alert.
-        NotificationService.scheduleTimerAlert(
-          _kNotifBaseTimer + 9000,
-          '🎉 Pomodoro complete',
-          '$loops rounds done. Great work!',
-          cursorSec,
-        );
-        notifIds.add(_kNotifBaseTimer + 9000);
-      } else {
-        // Replace live with "Break" chronometer.
-        final breakEndsAtMs = startedMs + (cursorSec + breakSec) * 1000;
-        NotificationService.scheduleLiveChronometer(
-          title: '☕ Break $r/${loops - 1}',
-          body: 'Tympeak — break in progress',
-          atSecondsFromNow: cursorSec,
-          baseTimeMs: breakEndsAtMs,
-          countDown: true,
-        );
-        // Audible alert for the transition.
-        final id1 = _kNotifBaseTimer + r * 2;
-        NotificationService.scheduleTimerAlert(id1,
-          '☕ Break time', 'Round $r done — take ${_breakMin}m.', cursorSec);
-        notifIds.add(id1);
-
-        cursorSec += breakSec;
-
-        // Replace live with next focus chronometer.
-        final focusEndsAtMs = startedMs + (cursorSec + focusSec) * 1000;
-        NotificationService.scheduleLiveChronometer(
-          title: '🎯 Focus ${r + 1}/$loops',
-          body: 'Tympeak — Pomodoro running',
-          atSecondsFromNow: cursorSec,
-          baseTimeMs: focusEndsAtMs,
-          countDown: true,
-        );
-        final id2 = _kNotifBaseTimer + r * 2 + 1;
-        NotificationService.scheduleTimerAlert(id2,
-          '🎯 Back to focus', 'Round ${r + 1} of $loops.', cursorSec);
-        notifIds.add(id2);
-      }
-    }
-    Storage.pomodoro.put('active', {
+    final active = <String, dynamic>{
       'type': 'pomodoro',
       'startedMs': startedMs,
       'focusSec': focusSec,
       'breakSec': breakSec,
       'loops':    loops,
-      'notifIds': notifIds,
-    });
+    };
+    Storage.pomodoro.put('active', active);
 
     setState(() {
       _pomoRunning = true;
@@ -370,7 +254,9 @@ class _TimerScreenState extends State<TimerScreen>
       _pomoRound   = 1;
       _pomoSegmentLeft = focusSec;
     });
-    TimerKeepAlive.start();
+    // Background isolate owns notifications: live chronometer + per-segment
+    // alerts + final completion. UI just ticks for the on-screen counter.
+    TimerKeepAlive.start(active);
     _startPomoUiTick();
   }
 
@@ -398,34 +284,21 @@ class _TimerScreenState extends State<TimerScreen>
   // ── Countdown control ─────────────────────────────────────────────────────
   void _startCd() {
     _clearActive();
-    final total = _cdSec;
+    final total     = _cdSec;
     final startedMs = DateTime.now().millisecondsSinceEpoch;
     _saveConfig();
 
-    // Live count-down chronometer (silent initial post).
-    NotificationService.showLiveChronometer(
-      title: '⏰ Countdown',
-      body: 'Tympeak — running',
-      baseTimeMs: startedMs + total * 1000,
-      countDown: true,
-    );
-
-    // Completion alert (different ID so it doesn't replace the live; live is
-    // cancelled by _clearActive when in-app detects 0).
-    const id = _kNotifBaseTimer + 9999;
-    NotificationService.scheduleTimerAlert(
-      id, '⏰ Time\'s up', 'Countdown complete', total);
-    Storage.pomodoro.put('active', {
+    final active = <String, dynamic>{
       'type': 'countdown',
       'startedMs': startedMs,
       'totalSec':  total,
-      'notifIds':  [id, NotificationService.kLiveTimerId],
-    });
+    };
+    Storage.pomodoro.put('active', active);
     setState(() {
       _cdRunning = true;
       _cdSecondsLeft = total;
     });
-    TimerKeepAlive.start();
+    TimerKeepAlive.start(active);
     _startCdUiTick();
   }
 
@@ -458,39 +331,29 @@ class _TimerScreenState extends State<TimerScreen>
     if (_swRunning) {
       // pause
       _swUiTimer?.cancel();
-      Storage.pomodoro.put('active', {
+      final active = <String, dynamic>{
         'type': 'stopwatch',
         'startedMs': _swStartMs,
         'priorMs':   _swElapsedMs,
         'paused':    true,
         'laps':      _laps,
-        'notifIds':  [NotificationService.kLiveTimerId],
-      });
-      NotificationService.showLiveStatic(
-        title: '⏱ Stopwatch paused',
-        body:  '${_fmtMs(_swElapsedMs)} elapsed — tap to resume',
-      );
+      };
+      Storage.pomodoro.put('active', active);
+      TimerKeepAlive.update(active);
       setState(() => _swRunning = false);
     } else {
-      // start or resume — chronometer base = now - elapsed (counts up from elapsed)
+      // start or resume
       final priorMs = _swElapsedMs;
       _swStartMs = DateTime.now().millisecondsSinceEpoch;
-      final chronometerBaseMs = _swStartMs - priorMs;
-      Storage.pomodoro.put('active', {
+      final active = <String, dynamic>{
         'type': 'stopwatch',
         'startedMs': _swStartMs,
         'priorMs':   priorMs,
         'paused':    false,
         'laps':      _laps,
-        'notifIds':  [NotificationService.kLiveTimerId],
-      });
-      NotificationService.showLiveChronometer(
-        title: '⏱ Stopwatch',
-        body:  'Tympeak — running',
-        baseTimeMs: chronometerBaseMs,
-        countDown: false,
-      );
-      TimerKeepAlive.start();
+      };
+      Storage.pomodoro.put('active', active);
+      TimerKeepAlive.start(active);
       setState(() => _swRunning = true);
       _startSwUiTick();
     }
@@ -524,6 +387,7 @@ class _TimerScreenState extends State<TimerScreen>
     if (a != null) {
       a['laps'] = _laps;
       Storage.pomodoro.put('active', a);
+      TimerKeepAlive.update(a);
     }
   }
 
